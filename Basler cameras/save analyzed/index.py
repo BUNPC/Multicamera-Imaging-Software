@@ -16,7 +16,7 @@ def obtain_frame(q,q2,camera,num_frame,num_frame_per_file):
     print('Obtain frame started')
     total_frame_ind = 0
     frame_ind = 0
-    start = time.time()
+    
     timestamps = [0]*num_frame
 
     while total_frame_ind < num_frame:
@@ -37,9 +37,6 @@ def obtain_frame(q,q2,camera,num_frame,num_frame_per_file):
         timestamps[total_frame_ind] = grabResult.ChunkTimestamp.Value
         
         img = grabResult.GetArray()
-
-        if total_frame_ind % 100 == 1:
-            print(str(img[200,200]))
         
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
@@ -52,39 +49,41 @@ def obtain_frame(q,q2,camera,num_frame,num_frame_per_file):
             # query the image
             q.put(img)
 
-            #end = time.time()
-            # print('Obtained frame #' + str(int(total_frame_ind)) + ': ' + str(end - start) + ' seconds.\n')
-            #start = time.time()
     endh = time.time()
     print('Obtained all frames in ' + str(endh-starth) + " seconds.\n")
 
     # query the time stamps
     q2.put(timestamps)
 
-def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x):
-    print('Save H5 started')
+def analyze(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x):
+    print('Analysis started')
     
     num_saved_frame = 0
     file_ind = 0
     frame_ind = 0
     total_frame_ind = 0
 
-    #imgs = [0]*num_frame_per_file
     if int(re.findall(r'\d+', bit_depth)[0]) > 8:
-        imgs = np.zeros((num_frame_per_file,image_y,image_x),dtype=np.uint16)
+        mean_I = np.zeros((num_frame_per_file,),dtype=np.float64)
     else:
-        imgs = np.zeros((num_frame_per_file,image_y,image_x),dtype=np.uint8)
+        mean_I = np.zeros((num_frame_per_file,),dtype=np.float64)
     
     while total_frame_ind < num_frame:
+
+        if total_frame_ind % 100 == 1:
+            print('Analyzing frame # ' + str(total_frame_ind))
 
         if total_frame_ind == 0:
             starth = time.time()
         
+        #start = time.time()
         img = q.get()
         queue_size = q.qsize()
+        #end = time.time()
 
         # make an array of images
-        imgs[frame_ind,:,:] = img
+        img = img.astype('float64')
+        mean_I[frame_ind] = np.mean(img)
 
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
@@ -95,18 +94,21 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,i
 
             start = time.time()
             hf = h5py.File(save_full, 'w')
-            hf.create_dataset('imgs', data=imgs,chunks=(1,image_y,image_x), maxshape=(num_frame_per_file, image_y, image_x))
+            hf.create_dataset('mean_I', data=mean_I,maxshape=(num_frame_per_file,))
             hf.close()
             del hf
             end = time.time()
-            # print(psutil.disk_io_counters(perdisk=True))
-            # t_sum = t_sum + end - start
 
-            num_saved_frame = num_saved_frame + len(imgs)
+            num_saved_frame = num_saved_frame + len(mean_I)
             print('Saved camera #' + str(int(camera_ind)) + ' frame #' + str(int(num_saved_frame)) + ": " + str(end - start) + " seconds. " + str(queue_size) + " in queue.\n")
 
             file_ind = file_ind + 1
             frame_ind = 0
+
+            if int(re.findall(r'\d+', bit_depth)[0]) > 8:
+                mean_I = np.zeros((num_frame_per_file,),dtype=np.float64)
+            else:
+                mean_I = np.zeros((num_frame_per_file,),dtype=np.float64)
         
     endh = time.time()
     print('Saved all frames in ' + str(endh-starth) + " seconds.\n")
@@ -124,7 +126,7 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,i
     hf = h5py.File(save_full, 'w')
     hf.create_dataset('timestamps', data=timestamps) 
     hf.close()
-    return imgs, file_ind
+    return file_ind
 
 def acquire(camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,num_frame,num_frame_per_file,save_folder):
     # process priority
@@ -206,8 +208,8 @@ def acquire(camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rat
     # create a separate thread for obtaining frames from camera
     pool.submit(obtain_frame,q,q2,camera,num_frame,num_frame_per_file)
 
-    # create a separate thread for querying the frames from the above thread and writing to H5 files
-    pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x)
+    # create a separate thread for querying the frames from the above thread and analyzing
+    pool.submit(analyze,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x)
     
     # wait for all tasks to complete
     pool.shutdown(wait=True)
@@ -244,7 +246,7 @@ if __name__ == "__main__":
     frame_rate = 120
 
     # Number of images to be grabbed.
-    num_frame_per_camera = 1000
+    num_frame_per_camera = 120*60*60
 
     # image size
     image_y = 1216
@@ -257,12 +259,10 @@ if __name__ == "__main__":
     num_frame_total = num_frame_per_camera*num_camera
 
     # max number of frames per file
-    num_frame_per_file = 100
+    num_frame_per_file = 120*60
 
-    #save_folders = ['G:\\Shared drives\\BOAS SCOS\\2023 SCOS camera selection\\experiments\\mean dark count variability\\over time\\12 bit 24 dB\\camera5_dark_checking_jumps','G:\\Shared drives\\BOAS SCOS\\2023 SCOS camera selection\\experiments\\mean dark count variability\\over time\\12 bit 24 dB\\camera1_dark_checking_jumps','G:\\Shared drives\\BOAS SCOS\\2023 SCOS camera selection\\experiments\\mean dark count variability\\over time\\12 bit 24 dB\\camera4_dark_checking_jumps','G:\\Shared drives\\BOAS SCOS\\2023 SCOS camera selection\\experiments\\mean dark count variability\\over time\\12 bit 24 dB\\camera3_dark_checking_jumps']
-    #save_folders = ['G:\\Shared drives\\BOAS SCOS\\2023 multi channel fbSCOS\\experiments\\20230806 galvo stability\\camera after galvo lens\\202308071809 20 min 983 mA no galvo']
-    #save_folders = ['G:\\Shared drives\\BOAS SCOS\\2023 SCOS camera selection\\experiments\\mean dark count variability\\over time\\10 bit 16 dB\\camera1_dark_checking_jumps']
-    save_folders = ['C:\\temp\\20230927\\dark12']
+    # array of save folders. One for each camera
+    save_folders = ['C:\\temp\\20231003\\10bit16db25blacklevel1000us']
 
     # make folder if it does not exist
     for save_folder in save_folders:
