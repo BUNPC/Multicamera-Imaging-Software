@@ -99,11 +99,14 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,i
             hf.close()
             del hf
             end = time.time()
-            # print(psutil.disk_io_counters(perdisk=True))
-            # t_sum = t_sum + end - start
 
             num_saved_frame = num_saved_frame + len(imgs)
             print('Saved camera #' + str(int(camera_ind)) + ' frame #' + str(int(num_saved_frame)) + ": " + str(end - start) + " seconds. " + str(queue_size) + " in queue.\n")
+
+            if int(re.findall(r'\d+', bit_depth)[0]) > 8:
+                imgs = np.zeros((num_frame_per_file,image_y,image_x),dtype=np.uint16)
+            else:
+                imgs = np.zeros((num_frame_per_file,image_y,image_x),dtype=np.uint8)
 
             file_ind = file_ind + 1
             frame_ind = 0
