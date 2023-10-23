@@ -1,8 +1,8 @@
 {
     "camera 0" : {
         "sn" : "40102811",
-        "save folder" : "C:\\temp\\20231019\\camera0",
-        "frame num" : 3000,
+        "save folder" : "C:\\temp\\20231022\\camera0",
+        "frame num" : 1000,
         "use trigger" : true,
         "bit depth" : "Mono10p",
         "frame rate" : 120,
@@ -12,8 +12,8 @@
     },
     "camera 1" : {
         "sn" : "40329188",
-        "save folder" : "C:\\temp\\20231019\\camera1",
-        "frame num" : 3000,
+        "save folder" : "C:\\temp\\20231022\\camera1",
+        "frame num" : 1000,
         "use trigger" : true,
         "bit depth" : "Mono10p",
         "frame rate" : 120,
@@ -23,8 +23,8 @@
     },
     "camera 2" : {
         "sn" : "40320386",
-        "save folder" : "C:\\temp\\20231019\\camera2",
-        "frame num" : 3000,
+        "save folder" : "C:\\temp\\20231022\\camera2",
+        "frame num" : 1000,
         "use trigger" : true,
         "bit depth" : "Mono10p",
         "frame rate" : 120,
@@ -34,8 +34,8 @@
     },
     "camera 3" : {
         "sn" : "40082391",
-        "save folder" : "C:\\temp\\20231019\\camera3",
-        "frame num" : 3000,
+        "save folder" : "C:\\temp\\20231022\\camera3",
+        "frame num" : 1000,
         "use trigger" : true,
         "bit depth" : "Mono10p",
         "frame rate" : 120,

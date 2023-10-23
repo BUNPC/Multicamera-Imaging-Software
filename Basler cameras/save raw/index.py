@@ -15,7 +15,7 @@ import json
 
 def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     starth = time.time()
-    print('Obtain frame started')
+    print('Obtain frame started for camera # ' + str(camera_ind))
     total_frame_ind = 0
     frame_ind = 0
     start = time.time()
@@ -30,7 +30,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         
         # first value is wait time before time out (in ms)
         grabResult = camera.RetrieveResult(
-            30000, pylon.TimeoutHandling_ThrowException)
+            120000, pylon.TimeoutHandling_ThrowException)
         
         # Access the chunk data attached to the result.
         # Before accessing the chunk data, you should check to see
@@ -60,7 +60,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     q2.put(timestamps)
 
 def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x):
-    print('Save H5 started')
+    print('Save H5 started for camera # ' + str(camera_ind))
     
     num_saved_frame = 0
     file_ind = 0
@@ -211,6 +211,9 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
         camera[0].TriggerMode.SetValue('On')
         camera[0].TriggerSource.SetValue('Line2')
         camera[0].TriggerActivation.SetValue('RisingEdge')
+        camera[0].LineSelector.SetValue('Line2')
+        camera[0].LineMode.SetValue('Input')
+        camera[0].LineSource.SetValue('ExposureActive')
     else:
         camera[0].TriggerMode.SetValue('Off')
         camera[0].AcquisitionFrameRateEnable.SetValue(True)
@@ -301,9 +304,9 @@ def gui(num_camera):
         exit()
 
     if event == 'Change':
-        gui(int(values['camera_num']))
+        values, num_camera = gui(int(values['camera_num']))
 
-    return values
+    return values, num_camera
 
 if __name__ == "__main__":
     os.environ["PYLON_CAMEMU"] = "3"
@@ -340,7 +343,7 @@ if __name__ == "__main__":
     # It is important to manage the available bandwidth when grabbing with multiple cameras.
     num_camera = 1
 
-    values = gui(num_camera)
+    values, num_camera = gui(num_camera)
 
     sn = list(range(num_camera))
     num_frame_per_camera = list(range(num_camera))
@@ -355,7 +358,7 @@ if __name__ == "__main__":
         sn[c_ind] = int(values['sn_' + str(c_ind)])
         num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind)])
         save_folders[c_ind] = values['folder_' + str(c_ind)]
-        use_trigger[c_ind] = values['folder_' + str(c_ind)]
+        use_trigger[c_ind] = values['trigger_' + str(c_ind)]
         bit_depth[c_ind] = values['bd_' + str(c_ind)]
         frame_rate[c_ind] = int(values['fr_' + str(c_ind)])
         exp_time[c_ind] = int(values['et_' + str(c_ind)])
