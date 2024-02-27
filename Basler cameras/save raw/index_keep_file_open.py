@@ -248,7 +248,8 @@ def gui(num_camera):
     layout = []
     layout += [sg.Text('Change # of cameras'), sg.In(key='camera_num'), sg.Button('Change')],
     layout += [sg.Text('Load parameters (.json)'), sg.In(size=(25,1), enable_events=True ,key='parameters'), sg.FileBrowse(), sg.Button('Fill')],
-    
+    layout += [[sg.Button('Run'), sg.Button('Cancel')]]
+
     for c_ind in range(num_camera):
         layout += [sg.Text('Camera ' + str(c_ind) + ':', font=("Helvetica", 12, "bold"))],
         layout += [sg.Text('SN'), sg.In(key='sn_' + str(c_ind))],
@@ -259,8 +260,11 @@ def gui(num_camera):
         layout += [sg.Text('Frame rate (Hz)'), sg.In(key='fr_' + str(c_ind))],
         layout += [sg.Text('Exposure time (us)'), sg.In(key='et_' + str(c_ind))],
         layout += [sg.Text('Gain (dB)'), sg.In(key='gain_' + str(c_ind))],
-        layout += [sg.Text('Black level'), sg.In(key='bl_' + str(c_ind))],
-    layout += [[sg.Button('Run'), sg.Button('Cancel')]]
+        layout += [sg.Text('Black level'), sg.In(key='bl_' + str(c_ind))],    
+        layout += [sg.Text('Height'), sg.In(key='image_y_' + str(c_ind))],    
+        layout += [sg.Text('Width'), sg.In(key='image_x_' + str(c_ind))],    
+        layout += [sg.Text('Offset Y'), sg.In(key='offset_y_' + str(c_ind))],    
+        layout += [sg.Text('Offset X'), sg.In(key='offset_x_' + str(c_ind))],    
 
     layout = [
         [
@@ -297,6 +301,10 @@ def gui(num_camera):
                 values['et_' + str(c_ind)] = data['camera ' + str(c_ind)]['exposure time']
                 values['bl_' + str(c_ind)] = data['camera ' + str(c_ind)]['black level']
                 values['gain_' + str(c_ind)] = data['camera ' + str(c_ind)]['gain']
+                values['image_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['image_y']
+                values['image_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['image_x']
+                values['offset_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset_y']
+                values['offset_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset_x']
             
             window.fill(values)
     
@@ -354,6 +362,10 @@ if __name__ == "__main__":
     exp_time = list(range(num_camera))
     gain = list(range(num_camera))
     black_level = list(range(num_camera))
+    image_y = list(range(num_camera))
+    image_x = list(range(num_camera))
+    offset_y = list(range(num_camera))
+    offset_x = list(range(num_camera))
     for c_ind in range(num_camera):
         sn[c_ind] = int(values['sn_' + str(c_ind)])
         num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind)])
@@ -364,6 +376,10 @@ if __name__ == "__main__":
         exp_time[c_ind] = int(values['et_' + str(c_ind)])
         gain[c_ind] = int(values['gain_' + str(c_ind)])
         black_level[c_ind] = int(values['bl_' + str(c_ind)])
+        image_y[c_ind] = int(values['image_y_' + str(c_ind)])
+        image_x[c_ind] = int(values['image_x_' + str(c_ind)])
+        offset_y[c_ind] = int(values['offset_y_' + str(c_ind)])
+        offset_x[c_ind] = int(values['offset_x_' + str(c_ind)])
 
     # make folder if it does not exist
     for save_folder in save_folders:
