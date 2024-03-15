@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # List of Python modules to install
-modules=("PySimpleGUI" "pypylon" "numpy" "h5py")
+modules=("PySimpleGUI" "pypylon" "numpy" "h5py" "re" "psutil")
 
 # Loop through the list and install each module
 for module in "${modules[@]}"; do
