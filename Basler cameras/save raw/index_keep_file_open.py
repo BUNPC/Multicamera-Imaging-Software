@@ -12,6 +12,7 @@ import multiprocessing as mp
 import re
 import PySimpleGUI as sg
 import json
+import psutil
 
 def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     starth = time.time()
@@ -22,11 +23,14 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     timestamps = [0]*num_frame
 
     while total_frame_ind < num_frame:
+        if total_frame_ind == 0:
+            t_start = time.time()
+
         if not camera.IsGrabbing():
             break
 
         if total_frame_ind % 100 == 0:
-            print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind) + ', ' + str(datetime.now()) + ', q = ' + str(q.qsize()) + "\n")
+            print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind) + ', ' + str(time.time()-t_start) + ' seconds, q = ' + str(q.qsize()) + "\n")
         
         # first value is wait time before time out (in ms)
         grabResult = camera.RetrieveResult(
@@ -60,6 +64,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     q2.put(timestamps)
 
 def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,save_folder,bit_depth,image_y,image_x):
+
     print('Save H5 started for camera # ' + str(camera_ind))
     
     num_saved_frame = 0
@@ -82,7 +87,7 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
             save_file = 'imgs_camera' + str(camera_ind) + '_file' + str(int(file_ind)) + '.h5'
             save_full = os.path.join(save_folder, save_file)
             hf = h5py.File(save_full, 'w')
-            dset = hf.create_dataset('imgs', data=img,chunks=(1,image_y/4,image_x/4), maxshape=(num_frame_per_file, image_y, image_x))
+            dset = hf.create_dataset('imgs', data=img,chunks=(1,image_y/2,image_x/2), maxshape=(num_frame_per_file, image_y, image_x))
         else:
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1:,:,:] = img
@@ -131,10 +136,20 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
     hf.close()
     return imgs, file_ind
 
-def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,num_frame,num_frame_per_file,num_frame_per_write,save_folder):
+def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,num_frame_per_write,save_folder):
     # process priority
     # p = psutil.Process(os.getpid())
-    # p.nice(psutil.HIGH_PRIORITY_CLASS)
+    
+    pid = os.getpid()
+    p = psutil.Process(pid)
+    p.nice(psutil.REALTIME_PRIORITY_CLASS)
+    nice_value = p.nice()
+    print(f"Child #{camera_ind}: {p}, nice value {nice_value}", flush=True)
+    print(f"Child #{camera_ind}: {p}, affinity {p.cpu_affinity()}", flush=True)
+    time.sleep(0.1)
+    cpu_core_inds = [camera_ind*2, camera_ind*2+1]
+    p.cpu_affinity(cpu_core_inds)
+    print(f"Child #{camera_ind}: Set my affinity to {cpu_core_inds}, affinity now {p.cpu_affinity()}", flush=True)
 
     # create a queue
     q = queue.Queue()
@@ -196,6 +211,8 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     # Size
     camera[0].Width.SetValue(image_x)
     camera[0].Height.SetValue(image_y)
+    camera[0].OffsetX.SetValue(offset_x)
+    camera[0].OffsetY.SetValue(offset_y)
 
     # Set bit depth
     camera[0].PixelFormat.SetValue(bit_depth)
@@ -317,6 +334,7 @@ def gui(num_camera):
     return values, num_camera
 
 if __name__ == "__main__":
+
     os.environ["PYLON_CAMEMU"] = "3"
 
     # The exit code of the sample application.
@@ -387,10 +405,6 @@ if __name__ == "__main__":
         if not save_folder_exists:
             os.makedirs(save_folder)
             print("Save folder created.")
-    
-    # image size
-    image_y = 1216
-    image_x = 1936
 
     # max number of frames per file
     num_frame_per_write = 100
@@ -413,19 +427,30 @@ if __name__ == "__main__":
         start = time.time()
 
         # make multiprocessing nodes
-        p = [0]*num_camera
-        for i in range(0,num_camera):
-            save_folder = save_folders[i]
-            print(save_folder)
-            p[i] = mp.Process(target=acquire,args=(devices_sn,sn[i],i,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y,image_x,num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
+        # p = [0]*num_camera
+        # for i in range(0,num_camera):
+        #     save_folder = save_folders[i]
+        #     print(save_folder)
 
-        # run the new process
-        for i in range(0,num_camera):
-            p[i].start()
+        #     p[i] = mp.Process(target=acquire,args=(devices_sn,sn[i],i,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
 
-        # join the new process to main process
-        for i in range(0,num_camera):
-            p[i].join()
+        # # run the new process
+        # for i in range(0,num_camera):
+        #     p[i].start()
+
+        # # join the new process to main process
+        # for i in range(0,num_camera):
+        #     p[i].join()
+
+        with mp.Pool() as pool:
+            for i in range(num_camera):
+                save_folder = save_folders[i]
+                print(save_folder)
+                pool.apply_async(acquire, (devices_sn,sn[i],i,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
+
+            # Wait for children to finnish
+            pool.close()
+            pool.join()
 
         end = time.time()
 
