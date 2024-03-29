@@ -136,7 +136,7 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
     hf.close()
     return imgs, file_ind
 
-def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,num_frame_per_write,save_folder):
+def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,num_frame_per_write,save_folder):
     # process priority
     # p = psutil.Process(os.getpid())
     
@@ -145,9 +145,7 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     p.nice(psutil.REALTIME_PRIORITY_CLASS)
     nice_value = p.nice()
     print(f"Child #{camera_ind}: {p}, nice value {nice_value}", flush=True)
-    print(f"Child #{camera_ind}: {p}, affinity {p.cpu_affinity()}", flush=True)
     time.sleep(0.1)
-    cpu_core_inds = [camera_ind*2, camera_ind*2+1]
     p.cpu_affinity(cpu_core_inds)
     print(f"Child #{camera_ind}: Set my affinity to {cpu_core_inds}, affinity now {p.cpu_affinity()}", flush=True)
 
@@ -158,6 +156,7 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     # find the right device index
     device_ind = [str(sn) == d for d in devices_sn]
     device_ind = [i for i, val in enumerate(device_ind) if val][0]
+    print('Camera # ' + str(camera_ind) + ' device index found')
 
     try:
         # Get the transport layer factory.
@@ -260,14 +259,16 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     
     return True
 
-def gui(num_camera):    
+def gui(camera_first,camera_last):   
+    num_camera = camera_last - camera_first + 1
+
     sg.theme('DarkAmber')   # Add a touch of color
     layout = []
-    layout += [sg.Text('Change # of cameras'), sg.In(key='camera_num'), sg.Button('Change')],
-    layout += [sg.Text('Load parameters (.json)'), sg.In(size=(25,1), enable_events=True ,key='parameters'), sg.FileBrowse(), sg.Button('Fill')],
-    layout += [[sg.Button('Run'), sg.Button('Cancel')]]
+    layout += [sg.Text('Camera index'), sg.In(size=(4,1), key='first_ind'), sg.Text('-'), sg.In(size=(4,1), key='last_ind'), sg.Button('Change camera range')],
+    layout += [sg.Text('Load parameters (.json)'), sg.In(size=(25,1), enable_events=True ,key='parameter_file'), sg.FileBrowse(), sg.Button('Load parameters')],
+    layout += [[sg.Button('Start acquisition'), sg.Button('Cancel')]]
 
-    for c_ind in range(num_camera):
+    for c_ind in range(camera_first,camera_last+1):
         layout += [sg.Text('Camera ' + str(c_ind) + ':', font=("Helvetica", 12, "bold"))],
         layout += [sg.Text('SN'), sg.In(key='sn_' + str(c_ind))],
         layout += [sg.Text('Save folder'), sg.In(size=(25,1), enable_events=True ,key='folder_' + str(c_ind)), sg.FolderBrowse()],
@@ -294,23 +295,36 @@ def gui(num_camera):
 
     while True:
         event, values = window.read()
-        if event in (sg.WIN_CLOSED,'Run','Cancel'):
+        if event in (sg.WIN_CLOSED,'Start acquisition','Cancel'):
             window.close()
             break
-        if event == 'Change':
+        if event == 'Change camera range':
             window.close()
             break
-        if event == 'Fill':
+        if event == 'Load parameters':
+            # get camera indexes
+            c_inds = range(camera_first,camera_last+1)
+
             # Opening JSON file
-            f = open(values['parameters'])
+            f = open(values['parameter_file'])
 
             # returns JSON object as 
             # a dictionary
             data = json.load(f)
 
-            for c_ind in range(num_camera):
+            # get rid of extra backslash at the beginning
+            save_folder_sub = data['save folder']
+            if save_folder_sub[:1] == '\\':
+                save_folder_sub = save_folder_sub[1:]
+            if save_folder_sub[-1:] == '\\':
+                save_folder_sub = save_folder_sub[:-1]
+
+            for c_ind in c_inds:
+                # make save folder
+                save_folder = data['camera ' + str(c_ind)]['save drive'] + '\\' + save_folder_sub + '\\' + 'camera' + str(c_ind)
+
                 values['sn_' + str(c_ind)] = data['camera ' + str(c_ind)]['sn']
-                values['folder_' + str(c_ind)] = data['camera ' + str(c_ind)]['save folder']
+                values['folder_' + str(c_ind)] = save_folder
                 values['frame_num_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame num']
                 values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
                 values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
@@ -318,20 +332,20 @@ def gui(num_camera):
                 values['et_' + str(c_ind)] = data['camera ' + str(c_ind)]['exposure time']
                 values['bl_' + str(c_ind)] = data['camera ' + str(c_ind)]['black level']
                 values['gain_' + str(c_ind)] = data['camera ' + str(c_ind)]['gain']
-                values['image_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['image_y']
-                values['image_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['image_x']
-                values['offset_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset_y']
-                values['offset_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset_x']
+                values['image_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['image y']
+                values['image_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['image x']
+                values['offset_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset y']
+                values['offset_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset x']
             
             window.fill(values)
     
     if event == 'Cancel':
         exit()
 
-    if event == 'Change':
-        values, num_camera = gui(int(values['camera_num']))
+    if event == 'Change camera range':
+        values, num_camera, camera_first, camera_last = gui(int(values['first_ind']),int(values['last_ind']))
 
-    return values, num_camera
+    return values, num_camera, camera_first, camera_last
 
 if __name__ == "__main__":
 
@@ -369,8 +383,9 @@ if __name__ == "__main__":
     # It is important to manage the available bandwidth when grabbing with multiple cameras.
     num_camera = 1
 
-    values, num_camera = gui(num_camera)
+    values, num_camera, camera_first, camera_last = gui(num_camera,num_camera)
 
+    camera_ind = list(range(num_camera))
     sn = list(range(num_camera))
     num_frame_per_camera = list(range(num_camera))
     save_folders = list(range(num_camera))
@@ -385,19 +400,20 @@ if __name__ == "__main__":
     offset_y = list(range(num_camera))
     offset_x = list(range(num_camera))
     for c_ind in range(num_camera):
-        sn[c_ind] = int(values['sn_' + str(c_ind)])
-        num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind)])
-        save_folders[c_ind] = values['folder_' + str(c_ind)]
-        use_trigger[c_ind] = values['trigger_' + str(c_ind)]
-        bit_depth[c_ind] = values['bd_' + str(c_ind)]
-        frame_rate[c_ind] = int(values['fr_' + str(c_ind)])
-        exp_time[c_ind] = int(values['et_' + str(c_ind)])
-        gain[c_ind] = int(values['gain_' + str(c_ind)])
-        black_level[c_ind] = int(values['bl_' + str(c_ind)])
-        image_y[c_ind] = int(values['image_y_' + str(c_ind)])
-        image_x[c_ind] = int(values['image_x_' + str(c_ind)])
-        offset_y[c_ind] = int(values['offset_y_' + str(c_ind)])
-        offset_x[c_ind] = int(values['offset_x_' + str(c_ind)])
+        camera_ind[c_ind] = c_ind + camera_first
+        sn[c_ind] = int(values['sn_' + str(c_ind + camera_first)])
+        num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind + camera_first)])
+        save_folders[c_ind] = values['folder_' + str(c_ind + camera_first)]
+        use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
+        bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
+        frame_rate[c_ind] = int(values['fr_' + str(c_ind + camera_first)])
+        exp_time[c_ind] = int(values['et_' + str(c_ind + camera_first)])
+        gain[c_ind] = int(values['gain_' + str(c_ind + camera_first)])
+        black_level[c_ind] = int(values['bl_' + str(c_ind + camera_first)])
+        image_y[c_ind] = int(values['image_y_' + str(c_ind + camera_first)])
+        image_x[c_ind] = int(values['image_x_' + str(c_ind + camera_first)])
+        offset_y[c_ind] = int(values['offset_y_' + str(c_ind + camera_first)])
+        offset_x[c_ind] = int(values['offset_x_' + str(c_ind + camera_first)])
 
     # make folder if it does not exist
     for save_folder in save_folders:
@@ -426,27 +442,12 @@ if __name__ == "__main__":
 
         start = time.time()
 
-        # make multiprocessing nodes
-        # p = [0]*num_camera
-        # for i in range(0,num_camera):
-        #     save_folder = save_folders[i]
-        #     print(save_folder)
-
-        #     p[i] = mp.Process(target=acquire,args=(devices_sn,sn[i],i,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
-
-        # # run the new process
-        # for i in range(0,num_camera):
-        #     p[i].start()
-
-        # # join the new process to main process
-        # for i in range(0,num_camera):
-        #     p[i].join()
-
         with mp.Pool() as pool:
             for i in range(num_camera):
                 save_folder = save_folders[i]
+                cpu_core_inds = [(camera_ind[i]-camera_first)*2, (camera_ind[i]-camera_first)*2+1]
                 print(save_folder)
-                pool.apply_async(acquire, (devices_sn,sn[i],i,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
+                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
 
             # Wait for children to finnish
             pool.close()
