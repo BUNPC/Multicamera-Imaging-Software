@@ -78,7 +78,7 @@ def generate_table(source_num,camera_num,data,qsize) -> Table:
         table.add_row(*value_str)
     return table
 
-def update(i, lines, axs, q):
+def update(i, lines, axs, q, camera_first_ind):
     # load data
     #print('Loading data')
     data = np.zeros((axs.shape[0],axs.shape[1],50))
@@ -102,9 +102,9 @@ def update(i, lines, axs, q):
         camera_ind = val_update['camera_ind']
         val_single = val_update['mean_val']
 
-        data[source_ind,camera_ind,0:49] = data[source_ind,camera_ind,1:50]
-        data[source_ind,camera_ind,49] = val_single
-        updated[source_ind,camera_ind] = updated[source_ind,camera_ind] + 1
+        data[source_ind,camera_ind-camera_first_ind,0:49] = data[source_ind,camera_ind-camera_first_ind,1:50]
+        data[source_ind,camera_ind-camera_first_ind,49] = val_single
+        updated[source_ind,camera_ind-camera_first_ind] = updated[source_ind,camera_ind-camera_first_ind] + 1
     
     # write csv
     #print('Writing data')
@@ -127,7 +127,7 @@ def update(i, lines, axs, q):
             y_max = np.max(y)
             axs[source_ind,camera_ind].set_ylim(y_min,y_max)
 
-def pool_data(camera_num,source_num,frame_rate,q):
+def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
     print('Initializing data')
     if os.path.exists('data_temp.csv'):
         os.remove('data_temp.csv')
@@ -145,11 +145,11 @@ def pool_data(camera_num,source_num,frame_rate,q):
         for camera_ind in range(0,camera_num):
             y = np.zeros(50)
             lines_row = lines_row + axs[source_ind,camera_ind].plot([x / (frame_rate/source_num) for x in range(0,y.size)],y,linewidth=1)
-            axs[source_ind,camera_ind].set_title('S' + str(source_ind+1) + 'D' + str(camera_ind + 1),fontsize = 8)
+            axs[source_ind,camera_ind].set_title('S' + str(source_ind+1) + 'D' + str(camera_ind + camera_first_ind),fontsize = 8)
             axs[source_ind,camera_ind].grid()
         lines = lines + lines_row
 
-    anim = FuncAnimation(fig, update, frames=100, fargs=(lines, axs, q), interval=200)
+    anim = FuncAnimation(fig, update, frames=100, fargs=(lines, axs, q, camera_first_ind), interval=200)
     plt.show()
 
     # while camera_1_frame < camera_frame_num:
@@ -181,7 +181,7 @@ def pool_data(camera_num,source_num,frame_rate,q):
         
     #     plt.pause(0.00001)
 
-def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,num_frame,num_frame_per_file,num_frame_per_write,save_folder,source_num,q):
+def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,q):
     # process priority
     # p = psutil.Process(os.getpid())
     # p.nice(psutil.HIGH_PRIORITY_CLASS)
@@ -245,6 +245,8 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     # Size
     camera[0].Width.SetValue(image_x)
     camera[0].Height.SetValue(image_y)
+    camera[0].OffsetX.SetValue(offset_x)
+    camera[0].OffsetY.SetValue(offset_y)
 
     # Set bit depth
     camera[0].PixelFormat.SetValue(bit_depth)
@@ -291,15 +293,16 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     
     return True
 
-def gui(num_camera):    
+def gui(camera_first,camera_last):   
+    num_camera = camera_last - camera_first + 1
+
     sg.theme('DarkAmber')   # Add a touch of color
     layout = []
-    layout += [sg.Text('Change # of cameras'), sg.In(key='camera_num'), sg.Button('Change')],
-    layout += [sg.Text('Load parameters (.json)'), sg.In(size=(25,1), enable_events=True ,key='parameters'), sg.FileBrowse(), sg.Button('Fill')],
+    layout += [sg.Text('Camera index'), sg.In(size=(4,1), key='first_ind'), sg.Text('-'), sg.In(size=(4,1), key='last_ind'), sg.Button('Change camera range')],
+    layout += [sg.Text('Load parameters (.json)'), sg.In(size=(25,1), enable_events=True ,key='parameter_file'), sg.FileBrowse(), sg.Button('Load parameters')],
+    layout += [[sg.Button('Start acquisition'), sg.Button('Cancel')]]
 
-    layout += [[sg.Button('Run'), sg.Button('Cancel')]]
-    
-    for c_ind in range(num_camera):
+    for c_ind in range(camera_first,camera_last+1):
         layout += [sg.Text('Camera ' + str(c_ind) + ':', font=("Helvetica", 12, "bold"))],
         layout += [sg.Text('SN'), sg.In(key='sn_' + str(c_ind))],
         layout += [sg.Text('Save folder'), sg.In(size=(25,1), enable_events=True ,key='folder_' + str(c_ind)), sg.FolderBrowse()],
@@ -309,7 +312,11 @@ def gui(num_camera):
         layout += [sg.Text('Frame rate (Hz)'), sg.In(key='fr_' + str(c_ind))],
         layout += [sg.Text('Exposure time (us)'), sg.In(key='et_' + str(c_ind))],
         layout += [sg.Text('Gain (dB)'), sg.In(key='gain_' + str(c_ind))],
-        layout += [sg.Text('Black level'), sg.In(key='bl_' + str(c_ind))],
+        layout += [sg.Text('Black level'), sg.In(key='bl_' + str(c_ind))],    
+        layout += [sg.Text('Height'), sg.In(key='image_y_' + str(c_ind))],    
+        layout += [sg.Text('Width'), sg.In(key='image_x_' + str(c_ind))],    
+        layout += [sg.Text('Offset Y'), sg.In(key='offset_y_' + str(c_ind))],    
+        layout += [sg.Text('Offset X'), sg.In(key='offset_x_' + str(c_ind))],    
 
     layout = [
         [
@@ -322,23 +329,36 @@ def gui(num_camera):
 
     while True:
         event, values = window.read()
-        if event in (sg.WIN_CLOSED,'Run','Cancel'):
+        if event in (sg.WIN_CLOSED,'Start acquisition','Cancel'):
             window.close()
             break
-        if event == 'Change':
+        if event == 'Change camera range':
             window.close()
             break
-        if event == 'Fill':
+        if event == 'Load parameters':
+            # get camera indexes
+            c_inds = range(camera_first,camera_last+1)
+
             # Opening JSON file
-            f = open(values['parameters'])
+            f = open(values['parameter_file'])
 
             # returns JSON object as 
             # a dictionary
             data = json.load(f)
 
-            for c_ind in range(num_camera):
+            # get rid of extra backslash at the beginning
+            save_folder_sub = data['save folder']
+            if save_folder_sub[:1] == '\\':
+                save_folder_sub = save_folder_sub[1:]
+            if save_folder_sub[-1:] == '\\':
+                save_folder_sub = save_folder_sub[:-1]
+
+            for c_ind in c_inds:
+                # make save folder
+                save_folder = data['camera ' + str(c_ind)]['save drive'] + '\\' + save_folder_sub + '\\' + 'camera' + str(c_ind)
+
                 values['sn_' + str(c_ind)] = data['camera ' + str(c_ind)]['sn']
-                values['folder_' + str(c_ind)] = data['camera ' + str(c_ind)]['save folder']
+                values['folder_' + str(c_ind)] = save_folder
                 values['frame_num_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame num']
                 values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
                 values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
@@ -346,16 +366,20 @@ def gui(num_camera):
                 values['et_' + str(c_ind)] = data['camera ' + str(c_ind)]['exposure time']
                 values['bl_' + str(c_ind)] = data['camera ' + str(c_ind)]['black level']
                 values['gain_' + str(c_ind)] = data['camera ' + str(c_ind)]['gain']
+                values['image_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['image y']
+                values['image_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['image x']
+                values['offset_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset y']
+                values['offset_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset x']
             
             window.fill(values)
     
     if event == 'Cancel':
         exit()
 
-    if event == 'Change':
-        values, num_camera = gui(int(values['camera_num']))
+    if event == 'Change camera range':
+        values, num_camera, camera_first, camera_last = gui(int(values['first_ind']),int(values['last_ind']))
 
-    return values, num_camera
+    return values, num_camera, camera_first, camera_last
 
 if __name__ == "__main__":
     os.environ["PYLON_CAMEMU"] = "3"
@@ -392,10 +416,11 @@ if __name__ == "__main__":
     # It is important to manage the available bandwidth when grabbing with multiple cameras.
     num_camera = 1
 
-    source_num = 6
+    source_num = 7
 
-    values, num_camera = gui(num_camera)
+    values, num_camera, camera_first, camera_last = gui(num_camera,num_camera)
 
+    camera_ind = list(range(num_camera))
     sn = list(range(num_camera))
     num_frame_per_camera = list(range(num_camera))
     save_folders = list(range(num_camera))
@@ -405,16 +430,25 @@ if __name__ == "__main__":
     exp_time = list(range(num_camera))
     gain = list(range(num_camera))
     black_level = list(range(num_camera))
+    image_y = list(range(num_camera))
+    image_x = list(range(num_camera))
+    offset_y = list(range(num_camera))
+    offset_x = list(range(num_camera))
     for c_ind in range(num_camera):
-        sn[c_ind] = int(values['sn_' + str(c_ind)])
-        num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind)])
-        save_folders[c_ind] = values['folder_' + str(c_ind)]
-        use_trigger[c_ind] = values['trigger_' + str(c_ind)]
-        bit_depth[c_ind] = values['bd_' + str(c_ind)]
-        frame_rate[c_ind] = int(values['fr_' + str(c_ind)])
-        exp_time[c_ind] = int(values['et_' + str(c_ind)])
-        gain[c_ind] = int(values['gain_' + str(c_ind)])
-        black_level[c_ind] = int(values['bl_' + str(c_ind)])
+        camera_ind[c_ind] = c_ind + camera_first
+        sn[c_ind] = int(values['sn_' + str(c_ind + camera_first)])
+        num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind + camera_first)])
+        save_folders[c_ind] = values['folder_' + str(c_ind + camera_first)]
+        use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
+        bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
+        frame_rate[c_ind] = int(values['fr_' + str(c_ind + camera_first)])
+        exp_time[c_ind] = int(values['et_' + str(c_ind + camera_first)])
+        gain[c_ind] = int(values['gain_' + str(c_ind + camera_first)])
+        black_level[c_ind] = int(values['bl_' + str(c_ind + camera_first)])
+        image_y[c_ind] = int(values['image_y_' + str(c_ind + camera_first)])
+        image_x[c_ind] = int(values['image_x_' + str(c_ind + camera_first)])
+        offset_y[c_ind] = int(values['offset_y_' + str(c_ind + camera_first)])
+        offset_x[c_ind] = int(values['offset_x_' + str(c_ind + camera_first)])
 
     # make folder if it does not exist
     for save_folder in save_folders:
@@ -422,10 +456,6 @@ if __name__ == "__main__":
         if not save_folder_exists:
             os.makedirs(save_folder)
             print("Save folder created.")
-    
-    # image size
-    image_y = 1216
-    image_x = 1936
 
     # max number of frames per file
     num_frame_per_write = 100
@@ -455,10 +485,10 @@ if __name__ == "__main__":
         for i in range(0,num_camera):
             save_folder = save_folders[i]
             print(save_folder)
-            p[i] = mp.Process(target=acquire,args=(devices_sn,sn[i],i,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y,image_x,num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,source_num,q))
+            p[i] = mp.Process(target=acquire,args=(devices_sn,sn[i],camera_ind[i],use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,q))
 
         # final node for table
-        p[-1] = mp.Process(target=pool_data,args=(num_camera,source_num,frame_rate[0],q))
+        p[-1] = mp.Process(target=pool_data,args=(num_camera,source_num,frame_rate[0],q,camera_first))
 
         # run the new process
         for i in range(0,num_camera+1):
