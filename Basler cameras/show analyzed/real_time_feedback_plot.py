@@ -78,12 +78,12 @@ def generate_table(source_num,camera_num,data,qsize) -> Table:
         table.add_row(*value_str)
     return table
 
-def update(i, lines, axs, q, camera_first_ind):
+def update(i, lines, axs, q, camera_first_ind, csv_file_name):
     # load data
     #print('Loading data')
     data = np.zeros((axs.shape[0],axs.shape[1],50))
-    if os.path.exists('data_temp.csv'):
-        with open('data_temp.csv', newline='') as csvfile:
+    if os.path.exists(csv_file_name):
+        with open(csv_file_name, newline='') as csvfile:
             csvreader_object=csv.reader(csvfile)
             for row in csvreader_object:
                 source_ind = int(row[0])
@@ -108,7 +108,7 @@ def update(i, lines, axs, q, camera_first_ind):
     
     # write csv
     #print('Writing data')
-    with open('data_temp.csv', 'w', newline='') as csvfile:  
+    with open(csv_file_name, 'w', newline='') as csvfile:  
         # creating a csv writer object  
         csvwriter = csv.writer(csvfile)
             
@@ -129,8 +129,9 @@ def update(i, lines, axs, q, camera_first_ind):
 
 def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
     print('Initializing data')
-    if os.path.exists('data_temp.csv'):
-        os.remove('data_temp.csv')
+    csv_file_name = 'data_temp' + str(camera_first_ind) + '.csv'
+    if os.path.exists(csv_file_name):
+        os.remove(csv_file_name)
 
     # get data from other threads
     camera_1_frame = 0
@@ -149,7 +150,7 @@ def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
             axs[source_ind,camera_ind].grid()
         lines = lines + lines_row
 
-    anim = FuncAnimation(fig, update, frames=100, fargs=(lines, axs, q, camera_first_ind), interval=200)
+    anim = FuncAnimation(fig, update, frames=100, fargs=(lines, axs, q, camera_first_ind, csv_file_name), interval=200)
     plt.show()
 
     # while camera_1_frame < camera_frame_num:
