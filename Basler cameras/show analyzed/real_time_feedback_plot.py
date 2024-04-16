@@ -362,11 +362,11 @@ def gui(camera_first,camera_last):
 
                 values['sn_' + str(c_ind)] = data['camera ' + str(c_ind)]['sn']
                 values['folder_' + str(c_ind)] = save_folder
-                values['frame_num_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame num']
+                values['frame_num_' + str(c_ind)] = data['frame num']
                 values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
                 values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
                 values['fr_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame rate']
-                values['et_' + str(c_ind)] = data['camera ' + str(c_ind)]['exposure time']
+                values['et_' + str(c_ind)] = data['exposure time']
                 values['bl_' + str(c_ind)] = data['camera ' + str(c_ind)]['black level']
                 values['gain_' + str(c_ind)] = data['camera ' + str(c_ind)]['gain']
                 values['image_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['image y']
