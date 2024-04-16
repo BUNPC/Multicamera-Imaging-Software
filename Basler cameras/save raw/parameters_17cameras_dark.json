@@ -212,7 +212,7 @@
     },
     "camera 17" : {
         "sn" : "40453549",
-        "save folder" : "F:",
+        "save drive" : "F:",
         "use trigger" : false,
         "bit depth" : "Mono10p",
         "frame rate" : 120,
