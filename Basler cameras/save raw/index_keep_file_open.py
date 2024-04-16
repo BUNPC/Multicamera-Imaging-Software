@@ -262,6 +262,7 @@ def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,bl
 def gui(camera_first,camera_last):   
     num_camera = camera_last - camera_first + 1
 
+    # GUI template is created
     sg.theme('DarkAmber')   # Add a touch of color
     layout = []
     layout += [sg.Text('Camera index'), sg.In(size=(4,1), key='first_ind'), sg.Text('-'), sg.In(size=(4,1), key='last_ind'), sg.Button('Change camera range')],
@@ -319,17 +320,18 @@ def gui(camera_first,camera_last):
             if save_folder_sub[-1:] == '\\':
                 save_folder_sub = save_folder_sub[:-1]
 
+            # Write from json file onto the GUI
             for c_ind in c_inds:
                 # make save folder
                 save_folder = data['camera ' + str(c_ind)]['save drive'] + '\\' + save_folder_sub + '\\' + 'camera' + str(c_ind)
 
                 values['sn_' + str(c_ind)] = data['camera ' + str(c_ind)]['sn']
                 values['folder_' + str(c_ind)] = save_folder
-                values['frame_num_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame num']
+                values['frame_num_' + str(c_ind)] = data['frame num']
                 values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
                 values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
                 values['fr_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame rate']
-                values['et_' + str(c_ind)] = data['camera ' + str(c_ind)]['exposure time']
+                values['et_' + str(c_ind)] = data['exposure time']
                 values['bl_' + str(c_ind)] = data['camera ' + str(c_ind)]['black level']
                 values['gain_' + str(c_ind)] = data['camera ' + str(c_ind)]['gain']
                 values['image_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['image y']

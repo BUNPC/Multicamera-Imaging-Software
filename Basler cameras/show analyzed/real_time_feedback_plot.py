@@ -125,6 +125,8 @@ def update(i, lines, axs, q, camera_first_ind, csv_file_name):
             lines[source_ind*camera_num + camera_ind].set_ydata(y)
             y_min = np.min(y)
             y_max = np.max(y)
+            if y_max == y_min:
+                y_max = y_min + 0.01  
             axs[source_ind,camera_ind].set_ylim(y_min,y_max)
 
 def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
