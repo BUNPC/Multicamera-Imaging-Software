@@ -34,7 +34,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         
         # first value is wait time before time out (in ms)
         grabResult = camera.RetrieveResult(
-            120000, pylon.TimeoutHandling_ThrowException)
+            300000, pylon.TimeoutHandling_ThrowException)
         
         # Access the chunk data attached to the result.
         # Before accessing the chunk data, you should check to see
@@ -284,6 +284,7 @@ def gui(camera_first,camera_last):
         layout += [sg.Text('Width'), sg.In(key='image_x_' + str(c_ind))],    
         layout += [sg.Text('Offset Y'), sg.In(key='offset_y_' + str(c_ind))],    
         layout += [sg.Text('Offset X'), sg.In(key='offset_x_' + str(c_ind))],    
+        layout += [sg.Text('CPU Core #'), sg.In(key='cpu_core_inds_' + str(c_ind))],    
 
     layout = [
         [
@@ -338,6 +339,7 @@ def gui(camera_first,camera_last):
                 values['image_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['image x']
                 values['offset_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset y']
                 values['offset_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset x']
+                values['cpu_core_inds_' + str(c_ind)] = data['camera ' + str(c_ind)]['cores used']
             
             window.fill(values)
     
@@ -401,6 +403,7 @@ if __name__ == "__main__":
     image_x = list(range(num_camera))
     offset_y = list(range(num_camera))
     offset_x = list(range(num_camera))
+    cpu_core_inds = list(range(num_camera))
     for c_ind in range(num_camera):
         camera_ind[c_ind] = c_ind + camera_first
         sn[c_ind] = int(values['sn_' + str(c_ind + camera_first)])
@@ -416,6 +419,7 @@ if __name__ == "__main__":
         image_x[c_ind] = int(values['image_x_' + str(c_ind + camera_first)])
         offset_y[c_ind] = int(values['offset_y_' + str(c_ind + camera_first)])
         offset_x[c_ind] = int(values['offset_x_' + str(c_ind + camera_first)])
+        cpu_core_inds[c_ind] = [eval(i) for i in values['cpu_core_inds_' + str(c_ind + camera_first)][1:-1].split(', ')]
 
     # make folder if it does not exist
     for save_folder in save_folders:
@@ -447,9 +451,10 @@ if __name__ == "__main__":
         with mp.Pool() as pool:
             for i in range(num_camera):
                 save_folder = save_folders[i]
-                cpu_core_inds = [(camera_ind[i]-camera_first)*2, (camera_ind[i]-camera_first)*2+1]
+                
+                #cpu_core_inds = cpu_core_inds[cpu_core_inds < 24] # make sure max # of cores is not reached
                 print(save_folder)
-                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
+                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds[i],use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
 
             # Wait for children to finnish
             pool.close()
