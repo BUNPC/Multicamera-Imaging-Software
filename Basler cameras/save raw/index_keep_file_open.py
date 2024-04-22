@@ -73,7 +73,8 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
     total_frame_ind = 0
 
     starth = time.time()
-    
+    img_length = num_frame_per_file
+
     while total_frame_ind < num_frame:
 
         img = q.get()
@@ -81,13 +82,13 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
 
         if frame_ind == 0:
             start = time.time()
-
+            
             img = np.expand_dims(img, axis=0)
 
             save_file = 'imgs_camera' + str(camera_ind) + '_file' + str(int(file_ind)) + '.h5'
             save_full = os.path.join(save_folder, save_file)
             hf = h5py.File(save_full, 'w')
-            dset = hf.create_dataset('imgs', data=img,chunks=(1,image_y/2,image_x/2), maxshape=(num_frame_per_file, image_y, image_x))
+            dset = hf.create_dataset('imgs', data=img,chunks=(1,image_y/2,image_x/2), maxshape=(img_length, image_y, image_x))
         else:
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1:,:,:] = img
@@ -106,15 +107,9 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
             num_saved_frame = num_saved_frame + file_size
             print('Saved camera #' + str(int(camera_ind)) + ' frame #' + str(int(num_saved_frame)) + ": " + str(end - start) + " seconds. " + str(queue_size) + " in queue.\n")
 
-            img_length = num_frame_per_file
             if num_frame - total_frame_ind < num_frame_per_file:
                 img_length = num_frame - total_frame_ind
-
-            if int(re.findall(r'\d+', bit_depth)[0]) > 8:
-                imgs = np.zeros((img_length,image_y,image_x),dtype=np.uint16)
-            else:
-                imgs = np.zeros((img_length,image_y,image_x),dtype=np.uint8)
-
+            
             file_ind = file_ind + 1
             frame_ind = 0
         
@@ -134,7 +129,7 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
     hf = h5py.File(save_full, 'w')
     hf.create_dataset('timestamps', data=timestamps) 
     hf.close()
-    return imgs, file_ind
+    return file_ind
 
 def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,num_frame_per_write,save_folder):
     # process priority
