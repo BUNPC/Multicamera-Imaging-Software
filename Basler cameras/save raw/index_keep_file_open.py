@@ -41,22 +41,15 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         # if the chunk is readable. When it is readable, the buffer
         # contains the requested chunk data.
         timestamps[total_frame_ind] = grabResult.ChunkTimestamp.Value
-        
-        img = grabResult.GetArray()
-        
+
+        q.put(grabResult.GetArray())
+                
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
-
-        q.put(img)
 
         if frame_ind == num_frame_per_file:
             frame_ind = 0
 
-            # query the image
-
-            #end = time.time()
-            # print('Obtained frame #' + str(int(total_frame_ind)) + ': ' + str(end - start) + ' seconds.\n')
-            #start = time.time()
     endh = time.time()
     print('Obtained all frames in ' + str(endh-starth) + " seconds.\n")
 
@@ -78,17 +71,16 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
     while total_frame_ind < num_frame:
 
         img = q.get()
+        img = np.expand_dims(img, axis=0)
         queue_size = q.qsize()
 
         if frame_ind == 0:
             start = time.time()
-            
-            img = np.expand_dims(img, axis=0)
 
             save_file = 'imgs_camera' + str(camera_ind) + '_file' + str(int(file_ind)) + '.h5'
             save_full = os.path.join(save_folder, save_file)
             hf = h5py.File(save_full, 'w')
-            dset = hf.create_dataset('imgs', data=img,chunks=(1,image_y/2,image_x/2), maxshape=(img_length, image_y, image_x))
+            dset = hf.create_dataset('imgs',data=img,chunks=(1,image_y/2,image_x/2), maxshape=(img_length, image_y, image_x))
         else:
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1:,:,:] = img
