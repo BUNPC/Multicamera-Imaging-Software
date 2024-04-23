@@ -30,9 +30,6 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         timestamps = [0]*num_frame
 
     while total_frame_ind < num_frame:
-        if ~frame_limit:
-            num_frame = total_frame_ind + 1
-
         if total_frame_ind == 0:
             t_start = time.time()
 
@@ -58,6 +55,9 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
 
+        if ~frame_limit:
+            num_frame = total_frame_ind + 1
+
         if frame_ind == num_frame_per_file:
             frame_ind = 0
 
@@ -81,14 +81,11 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
 
     if num_frame == 0:
         frame_limit = False
-        num_frame = total_frame_ind + 1
+        num_frame = total_frame_ind + num_frame_per_file + 1
     else:
         frame_limit = True
 
     while total_frame_ind < num_frame:
-        if ~frame_limit:
-            num_frame = total_frame_ind + 1
-
         img = q.get()
         img = np.expand_dims(img, axis=0)
         queue_size = q.qsize()
@@ -106,6 +103,9 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
 
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
+
+        if ~frame_limit:
+            num_frame = total_frame_ind + num_frame_per_file + 1
 
         # last write of the file
         if frame_ind >= num_frame_per_file or total_frame_ind == num_frame:
