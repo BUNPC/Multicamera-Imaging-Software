@@ -20,9 +20,19 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     total_frame_ind = 0
     frame_ind = 0
     start = time.time()
-    timestamps = [0]*num_frame
+    if num_frame == 0:
+        frame_limit = False
+        num_frame = 100
+    else:
+        frame_limit = True
+
+    if frame_limit:
+        timestamps = [0]*num_frame
 
     while total_frame_ind < num_frame:
+        if ~frame_limit:
+            num_frame = total_frame_ind + 1
+
         if total_frame_ind == 0:
             t_start = time.time()
 
@@ -40,7 +50,8 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         # Before accessing the chunk data, you should check to see
         # if the chunk is readable. When it is readable, the buffer
         # contains the requested chunk data.
-        timestamps[total_frame_ind] = grabResult.ChunkTimestamp.Value
+        if frame_limit:
+            timestamps[total_frame_ind] = grabResult.ChunkTimestamp.Value
 
         q.put(grabResult.GetArray())
                 
@@ -68,7 +79,15 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
     starth = time.time()
     img_length = num_frame_per_file
 
+    if num_frame == 0:
+        frame_limit = False
+        num_frame = 100
+    else:
+        frame_limit = True
+
     while total_frame_ind < num_frame:
+        if ~frame_limit:
+            num_frame = total_frame_ind + 1
 
         img = q.get()
         img = np.expand_dims(img, axis=0)
