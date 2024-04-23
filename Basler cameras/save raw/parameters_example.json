@@ -1,6 +1,7 @@
 {
     "save folder": "\\test\\run1\\",
     "frame num" : 6000,
+    "frame num per file" : 1000,
     "exposure time" : 4000,
     "camera 1" : {
         "sn" : "40102811",
