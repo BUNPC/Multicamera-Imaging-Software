@@ -10,7 +10,7 @@ import concurrent.futures
 import queue
 import multiprocessing as mp
 import re
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 import json
 import psutil
 
@@ -67,7 +67,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     # query the time stamps
     q2.put(timestamps)
 
-def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,save_folder,bit_depth,image_y,image_x):
+def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x):
 
     print('Save H5 started for camera # ' + str(camera_ind))
     
@@ -142,7 +142,7 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
     hf.close()
     return file_ind
 
-def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,num_frame_per_write,save_folder):
+def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,save_folder):
     # process priority
     # p = psutil.Process(os.getpid())
     
@@ -253,7 +253,7 @@ def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,bl
     pool.submit(obtain_frame,q,q2,camera_ind,camera,num_frame,num_frame_per_file)
 
     # create a separate thread for querying the frames from the above thread and writing to H5 files
-    pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,save_folder,bit_depth,image_y,image_x)
+    pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x)
     
     # wait for all tasks to complete
     pool.shutdown(wait=True)
@@ -280,6 +280,7 @@ def gui(camera_first,camera_last):
         layout += [sg.Text('SN'), sg.In(key='sn_' + str(c_ind))],
         layout += [sg.Text('Save folder'), sg.In(size=(25,1), enable_events=True ,key='folder_' + str(c_ind)), sg.FolderBrowse()],
         layout += [sg.Text('Frame number'), sg.In(key='frame_num_' + str(c_ind))],
+        layout += [sg.Text('Frame number per file'), sg.In(key='frame_num_file_' + str(c_ind))],
         layout += [sg.Checkbox('Use trigger', key='trigger_' + str(c_ind))],
         layout += [sg.Text('Bit depth (Mono8, Mono10p, Mono12p)'), sg.In(key='bd_' + str(c_ind))],
         layout += [sg.Text('Frame rate (Hz)'), sg.In(key='fr_' + str(c_ind))],
@@ -335,6 +336,7 @@ def gui(camera_first,camera_last):
                 values['sn_' + str(c_ind)] = data['camera ' + str(c_ind)]['sn']
                 values['folder_' + str(c_ind)] = save_folder
                 values['frame_num_' + str(c_ind)] = data['frame num']
+                values['frame_num_file_' + str(c_ind)] = data['frame num per file']
                 values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
                 values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
                 values['fr_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame rate']
@@ -398,6 +400,7 @@ if __name__ == "__main__":
     camera_ind = list(range(num_camera))
     sn = list(range(num_camera))
     num_frame_per_camera = list(range(num_camera))
+    num_frame_per_file = list(range(num_camera))
     save_folders = list(range(num_camera))
     use_trigger = list(range(num_camera))
     bit_depth = list(range(num_camera))
@@ -414,6 +417,7 @@ if __name__ == "__main__":
         camera_ind[c_ind] = c_ind + camera_first
         sn[c_ind] = int(values['sn_' + str(c_ind + camera_first)])
         num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind + camera_first)])
+        num_frame_per_file[c_ind] = int(values['frame_num_file_' + str(c_ind + camera_first)])
         save_folders[c_ind] = values['folder_' + str(c_ind + camera_first)]
         use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
         bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
@@ -433,10 +437,6 @@ if __name__ == "__main__":
         if not save_folder_exists:
             os.makedirs(save_folder)
             print("Save folder created.")
-
-    # max number of frames per file
-    num_frame_per_write = 100
-    num_frame_per_file = 1000
 
     try:
         # list of devices
@@ -460,7 +460,7 @@ if __name__ == "__main__":
                 
                 #cpu_core_inds = cpu_core_inds[cpu_core_inds < 24] # make sure max # of cores is not reached
                 print(save_folder)
-                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds[i],use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file,num_frame_per_write,save_folder,))
+                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds[i],use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file[i],save_folder,))
 
             # Wait for children to finnish
             pool.close()
