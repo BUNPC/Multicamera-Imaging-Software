@@ -22,7 +22,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     start = time.time()
     if num_frame == 0:
         frame_limit = False
-        num_frame = 100
+        num_frame = total_frame_ind + 1
     else:
         frame_limit = True
 
@@ -81,7 +81,7 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,num_frame_per_write,sav
 
     if num_frame == 0:
         frame_limit = False
-        num_frame = 100
+        num_frame = total_frame_ind + 1
     else:
         frame_limit = True
 
