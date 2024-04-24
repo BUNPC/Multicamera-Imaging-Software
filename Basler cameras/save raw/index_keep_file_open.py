@@ -55,7 +55,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
 
-        if ~frame_limit:
+        if not frame_limit:
             num_frame = total_frame_ind + 1
 
         if frame_ind == num_frame_per_file:
@@ -67,7 +67,7 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
     # query the time stamps
     q2.put(timestamps)
 
-def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x):
+def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,image_y,image_x):
 
     print('Save H5 started for camera # ' + str(camera_ind))
     
@@ -78,6 +78,8 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,i
 
     starth = time.time()
     img_length = num_frame_per_file
+
+    print('Num frame: ' + str(num_frame))
 
     if num_frame == 0:
         frame_limit = False
@@ -104,8 +106,8 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,i
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
 
-        if ~frame_limit:
-            num_frame = total_frame_ind + num_frame_per_file + 1
+        if not frame_limit:
+            num_frame = total_frame_ind + num_frame_per_file + 1        
 
         # last write of the file
         if frame_ind >= num_frame_per_file or total_frame_ind == num_frame:
@@ -253,14 +255,14 @@ def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,bl
     pool.submit(obtain_frame,q,q2,camera_ind,camera,num_frame,num_frame_per_file)
 
     # create a separate thread for querying the frames from the above thread and writing to H5 files
-    pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x)
+    pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,image_y,image_x)
     
     # wait for all tasks to complete
     pool.shutdown(wait=True)
 
     end = time.time()
 
-    print('Total time taken (seconds) : ' + str(round((end - start))) + "\n")
+    print('Camera ' + str(camera_ind) + ' time taken (seconds) : ' + str(round((end - start))) + "\n")
     camera[0].Close()
     
     return True
