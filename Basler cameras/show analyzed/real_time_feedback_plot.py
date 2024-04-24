@@ -10,7 +10,7 @@ import concurrent.futures
 import queue
 import multiprocessing as mp
 import re
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 import json
 import matplotlib.pyplot as plt
 from tabulate import tabulate
@@ -299,6 +299,7 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
 def gui(camera_first,camera_last):   
     num_camera = camera_last - camera_first + 1
 
+    # GUI template is created
     sg.theme('DarkAmber')   # Add a touch of color
     layout = []
     layout += [sg.Text('Camera index'), sg.In(size=(4,1), key='first_ind'), sg.Text('-'), sg.In(size=(4,1), key='last_ind'), sg.Button('Change camera range')],
@@ -310,6 +311,7 @@ def gui(camera_first,camera_last):
         layout += [sg.Text('SN'), sg.In(key='sn_' + str(c_ind))],
         layout += [sg.Text('Save folder'), sg.In(size=(25,1), enable_events=True ,key='folder_' + str(c_ind)), sg.FolderBrowse()],
         layout += [sg.Text('Frame number'), sg.In(key='frame_num_' + str(c_ind))],
+        layout += [sg.Text('Frame number per file'), sg.In(key='frame_num_file_' + str(c_ind))],
         layout += [sg.Checkbox('Use trigger', key='trigger_' + str(c_ind))],
         layout += [sg.Text('Bit depth (Mono8, Mono10p, Mono12p)'), sg.In(key='bd_' + str(c_ind))],
         layout += [sg.Text('Frame rate (Hz)'), sg.In(key='fr_' + str(c_ind))],
@@ -320,6 +322,7 @@ def gui(camera_first,camera_last):
         layout += [sg.Text('Width'), sg.In(key='image_x_' + str(c_ind))],    
         layout += [sg.Text('Offset Y'), sg.In(key='offset_y_' + str(c_ind))],    
         layout += [sg.Text('Offset X'), sg.In(key='offset_x_' + str(c_ind))],    
+        layout += [sg.Text('CPU Core #'), sg.In(key='cpu_core_inds_' + str(c_ind))],    
 
     layout = [
         [
@@ -356,6 +359,7 @@ def gui(camera_first,camera_last):
             if save_folder_sub[-1:] == '\\':
                 save_folder_sub = save_folder_sub[:-1]
 
+            # Write from json file onto the GUI
             for c_ind in c_inds:
                 # make save folder
                 save_folder = data['camera ' + str(c_ind)]['save drive'] + '\\' + save_folder_sub + '\\' + 'camera' + str(c_ind)
@@ -363,6 +367,7 @@ def gui(camera_first,camera_last):
                 values['sn_' + str(c_ind)] = data['camera ' + str(c_ind)]['sn']
                 values['folder_' + str(c_ind)] = save_folder
                 values['frame_num_' + str(c_ind)] = data['frame num']
+                values['frame_num_file_' + str(c_ind)] = data['frame num per file']
                 values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
                 values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
                 values['fr_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame rate']
@@ -373,6 +378,7 @@ def gui(camera_first,camera_last):
                 values['image_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['image x']
                 values['offset_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset y']
                 values['offset_x_' + str(c_ind)] = data['camera ' + str(c_ind)]['offset x']
+                values['cpu_core_inds_' + str(c_ind)] = data['camera ' + str(c_ind)]['cores used']
             
             window.fill(values)
     
@@ -426,6 +432,7 @@ if __name__ == "__main__":
     camera_ind = list(range(num_camera))
     sn = list(range(num_camera))
     num_frame_per_camera = list(range(num_camera))
+    num_frame_per_file = list(range(num_camera))
     save_folders = list(range(num_camera))
     use_trigger = list(range(num_camera))
     bit_depth = list(range(num_camera))
@@ -437,10 +444,12 @@ if __name__ == "__main__":
     image_x = list(range(num_camera))
     offset_y = list(range(num_camera))
     offset_x = list(range(num_camera))
+    cpu_core_inds = list(range(num_camera))
     for c_ind in range(num_camera):
         camera_ind[c_ind] = c_ind + camera_first
         sn[c_ind] = int(values['sn_' + str(c_ind + camera_first)])
         num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind + camera_first)])
+        num_frame_per_file[c_ind] = int(values['frame_num_file_' + str(c_ind + camera_first)])
         save_folders[c_ind] = values['folder_' + str(c_ind + camera_first)]
         use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
         bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
@@ -452,6 +461,7 @@ if __name__ == "__main__":
         image_x[c_ind] = int(values['image_x_' + str(c_ind + camera_first)])
         offset_y[c_ind] = int(values['offset_y_' + str(c_ind + camera_first)])
         offset_x[c_ind] = int(values['offset_x_' + str(c_ind + camera_first)])
+        cpu_core_inds[c_ind] = [eval(i) for i in values['cpu_core_inds_' + str(c_ind + camera_first)][1:-1].split(', ')]
 
     # make folder if it does not exist
     for save_folder in save_folders:
