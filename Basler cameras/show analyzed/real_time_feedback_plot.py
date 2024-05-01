@@ -81,7 +81,10 @@ def generate_table(source_num,camera_num,data,qsize) -> Table:
 def update(i, lines, axs, q, camera_first_ind, csv_file_name):
     # load data
     #print('Loading data')
-    data = np.zeros((axs.shape[0],axs.shape[1],50))
+    if len(axs.shape) == 1:
+        data = np.zeros((axs.shape[0],1,50))
+    else:
+        data = np.zeros((axs.shape[0],axs.shape[1],50))
     if os.path.exists(csv_file_name):
         with open(csv_file_name, newline='') as csvfile:
             csvreader_object=csv.reader(csvfile)
@@ -94,8 +97,14 @@ def update(i, lines, axs, q, camera_first_ind, csv_file_name):
 
     # update data
     print('Queue size : ' + str(q.qsize()))
-    updated = np.zeros((axs.shape[0],axs.shape[1]))
-    while np.sum(updated) < axs.shape[0]*axs.shape[1]*40:
+    if len(axs.shape) == 1:
+        updated = np.zeros((axs.shape[0],1))
+        frame_buffer_num = axs.shape[0]*40
+    else:
+        updated = np.zeros((axs.shape[0],axs.shape[1]))
+        frame_buffer_num = axs.shape[0]*axs.shape[1]*40
+    
+    while np.sum(updated) < frame_buffer_num:
         val_update = q.get()
         frame_ind = val_update['frame_ind']
         source_ind = frame_ind % source_num
@@ -126,8 +135,12 @@ def update(i, lines, axs, q, camera_first_ind, csv_file_name):
             y_min = np.min(y)
             y_max = np.max(y)
             if y_max == y_min:
-                y_max = y_min + 0.01  
-            axs[source_ind,camera_ind].set_ylim(y_min,y_max)
+                y_max = y_min + 0.01 
+            if len(axs.shape) == 1:
+                axs[source_ind].set_ylim(y_min,y_max)
+            else:
+                axs[source_ind,camera_ind].set_ylim(y_min,y_max)
+            
 
 def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
     print('Initializing data')
@@ -147,9 +160,14 @@ def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
         lines_row = []
         for camera_ind in range(0,camera_num):
             y = np.zeros(50)
-            lines_row = lines_row + axs[source_ind,camera_ind].plot([x / (frame_rate/source_num) for x in range(0,y.size)],y,linewidth=1)
-            axs[source_ind,camera_ind].set_title('S' + str(source_ind+1) + 'D' + str(camera_ind + camera_first_ind),fontsize = 8)
-            axs[source_ind,camera_ind].grid()
+            if camera_num == 1:
+                lines_row = lines_row + axs[source_ind].plot([x / (frame_rate/source_num) for x in range(0,y.size)],y,linewidth=1)
+                axs[source_ind].set_title('S' + str(source_ind+1) + 'D' + str(camera_ind + camera_first_ind),fontsize = 8)
+                axs[source_ind].grid()
+            else:
+                lines_row = lines_row + axs[source_ind,camera_ind].plot([x / (frame_rate/source_num) for x in range(0,y.size)],y,linewidth=1)
+                axs[source_ind,camera_ind].set_title('S' + str(source_ind+1) + 'D' + str(camera_ind + camera_first_ind),fontsize = 8)
+                axs[source_ind,camera_ind].grid()
         lines = lines + lines_row
 
     anim = FuncAnimation(fig, update, frames=100, fargs=(lines, axs, q, camera_first_ind, csv_file_name), interval=200)
