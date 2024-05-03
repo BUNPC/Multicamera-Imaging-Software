@@ -9,11 +9,11 @@ from datetime import datetime
 import concurrent.futures
 import queue
 import multiprocessing as mp
-import re
-import json
 import psutil
-import math
-from basler import camera_select_gui
+
+sys.path.append('.')
+
+from lib import gui
 
 def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file,exp_time_pattern):
     starth = time.time()
@@ -306,43 +306,8 @@ if __name__ == "__main__":
     # It is important to manage the available bandwidth when grabbing with multiple cameras.
     num_camera = 1
 
-    values, num_camera, camera_first, camera_last = gui(num_camera,num_camera)
-
-    camera_ind = list(range(num_camera))
-    sn = list(range(num_camera))
-    num_frame_per_camera = list(range(num_camera))
-    num_frame_per_file = list(range(num_camera))
-    save_folders = list(range(num_camera))
-    use_trigger = list(range(num_camera))
-    bit_depth = list(range(num_camera))
-    frame_rate = list(range(num_camera))
-    exp_time_patterns = list(range(num_camera))
-    gain = list(range(num_camera))
-    black_level = list(range(num_camera))
-    image_y = list(range(num_camera))
-    image_x = list(range(num_camera))
-    offset_y = list(range(num_camera))
-    offset_x = list(range(num_camera))
-    cpu_core_inds = list(range(num_camera))
-    for c_ind in range(num_camera):
-        camera_ind[c_ind] = c_ind + camera_first
-        sn[c_ind] = int(values['sn_' + str(c_ind + camera_first)])
-        num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind + camera_first)])
-        num_frame_per_file[c_ind] = int(values['frame_num_file_' + str(c_ind + camera_first)])
-        save_folders[c_ind] = values['folder_' + str(c_ind + camera_first)]
-        use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
-        bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
-        frame_rate[c_ind] = int(values['fr_' + str(c_ind + camera_first)])
-        exp_time_patterns[c_ind] = [eval(i) for i in values['et_' + str(c_ind + camera_first)][1:-1].split(', ')]
-        exp_time_patterns[c_ind] = exp_time_patterns[c_ind] * math.ceil(num_frame_per_camera[c_ind]/len(exp_time_patterns[c_ind]))
-        gain[c_ind] = int(values['gain_' + str(c_ind + camera_first)])
-        black_level[c_ind] = int(values['bl_' + str(c_ind + camera_first)])
-        image_y[c_ind] = int(values['image_y_' + str(c_ind + camera_first)])
-        image_x[c_ind] = int(values['image_x_' + str(c_ind + camera_first)])
-        offset_y[c_ind] = int(values['offset_y_' + str(c_ind + camera_first)])
-        offset_x[c_ind] = int(values['offset_x_' + str(c_ind + camera_first)])
-        cpu_core_inds[c_ind] = [eval(i) for i in values['cpu_core_inds_' + str(c_ind + camera_first)][1:-1].split(', ')]
-
+    values, num_camera, camera_first, camera_last = gui.camera_select_gui(num_camera,num_camera)
+    camera_ind, sn, num_frame_per_camera, num_frame_per_file, save_folders, use_trigger, bit_depth, frame_rate, exp_time_patterns, gain, black_level, image_y, image_x, offset_y, offset_x, cpu_core_inds = gui.parse_gui_output(values, num_camera, camera_first)
 
     # make folder if it does not exist
     for save_folder in save_folders:
