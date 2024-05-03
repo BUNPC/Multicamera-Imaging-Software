@@ -17,7 +17,7 @@ sys.path.append('.')
 
 from lib import gui
 
-def obtain_frame(q,camera_ind,camera,num_frame,num_frame_per_file):
+def obtain_frame(q,camera_ind,camera,num_frame_per_file,exp_time_pattern):
     starth = time.time()
     print('Obtain frame started for camera # ' + str(camera_ind))
     total_frame_ind = 0
@@ -30,6 +30,9 @@ def obtain_frame(q,camera_ind,camera,num_frame,num_frame_per_file):
 
         # if total_frame_ind % 100 == 0:
         #     print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind) + ', ' + str(datetime.now()) + ', q = ' + str(q.qsize()) + "\n")
+        
+        exp_ind = total_frame_ind % len(exp_time_pattern)
+        camera[0].ExposureTime.SetValue(exp_time_pattern[exp_ind])
         
         # first value is wait time before time out (in ms)
         grabResult = camera.RetrieveResult(
@@ -200,7 +203,7 @@ def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
         
     #     plt.pause(0.00001)
 
-def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,q):
+def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time_pattern,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,q):
     # process priority
     # p = psutil.Process(os.getpid())
     # p.nice(psutil.HIGH_PRIORITY_CLASS)
@@ -259,7 +262,7 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     camera[0].ChunkEnable = True
 
     # Exposure time
-    camera[0].ExposureTime.SetValue(exp_time)
+    camera[0].ExposureTime.SetValue(exp_time_pattern[0])
 
     # Size
     camera[0].Width.SetValue(image_x)
@@ -298,7 +301,7 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 
     # create a separate thread for obtaining frames from camera
-    pool.submit(obtain_frame,q,camera_ind,camera,num_frame,num_frame_per_file)
+    pool.submit(obtain_frame,q,camera_ind,camera,num_frame_per_file,exp_time_pattern)
 
     #pool_data(camera_num,source_num,num_frame,q)
     
