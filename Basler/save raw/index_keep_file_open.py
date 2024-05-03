@@ -10,56 +10,68 @@ import concurrent.futures
 import queue
 import multiprocessing as mp
 import re
-import PySimpleGUI as sg
 import json
+import psutil
+import math
+from basler import camera_select_gui
 
-def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
+def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file,exp_time_pattern):
     starth = time.time()
     print('Obtain frame started for camera # ' + str(camera_ind))
     total_frame_ind = 0
     frame_ind = 0
     start = time.time()
-    timestamps = [0]*num_frame
+    if num_frame == 0:
+        frame_limit = False
+        num_frame = total_frame_ind + 1
+    else:
+        frame_limit = True
+
+    if frame_limit:
+        timestamps = [0]*num_frame
 
     while total_frame_ind < num_frame:
+        if total_frame_ind == 0:
+            t_start = time.time()
+
         if not camera.IsGrabbing():
             break
 
-        if total_frame_ind % 100 == 0:
-            print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind) + ', ' + str(datetime.now()) + ', q = ' + str(q.qsize()) + "\n")
+        camera[0].ExposureTime.SetValue(exp_time_pattern[total_frame_ind])
+
+        if total_frame_ind % 100 == 99:
+            print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind+1) + ', ' + str(time.time()-t_start) + ' seconds, q = ' + str(q.qsize()) + "\n")
         
         # first value is wait time before time out (in ms)
         grabResult = camera.RetrieveResult(
-            120000, pylon.TimeoutHandling_ThrowException)
-        
+            300000, pylon.TimeoutHandling_ThrowException)
+                
         # Access the chunk data attached to the result.
         # Before accessing the chunk data, you should check to see
         # if the chunk is readable. When it is readable, the buffer
         # contains the requested chunk data.
-        timestamps[total_frame_ind] = grabResult.ChunkTimestamp.Value
-        
-        img = grabResult.GetArray()
-        
+        if frame_limit:
+            timestamps[total_frame_ind] = grabResult.ChunkTimestamp.Value
+
+        q.put(grabResult.GetArray())
+                
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
 
-        q.put(img)
+        if not frame_limit:
+            num_frame = total_frame_ind + 1
 
         if frame_ind == num_frame_per_file:
             frame_ind = 0
 
-            # query the image
-
-            #end = time.time()
-            # print('Obtained frame #' + str(int(total_frame_ind)) + ': ' + str(end - start) + ' seconds.\n')
-            #start = time.time()
     endh = time.time()
     print('Obtained all frames in ' + str(endh-starth) + " seconds.\n")
 
     # query the time stamps
     q2.put(timestamps)
 
-def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x):
+def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,image_y,image_x):
+
     print('Save H5 started for camera # ' + str(camera_ind))
     
     num_saved_frame = 0
@@ -67,49 +79,53 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,i
     frame_ind = 0
     total_frame_ind = 0
 
-    #imgs = [0]*num_frame_per_file
-    if int(re.findall(r'\d+', bit_depth)[0]) > 8:
-        imgs = np.zeros((num_frame_per_file,image_y,image_x),dtype=np.uint16)
-    else:
-        imgs = np.zeros((num_frame_per_file,image_y,image_x),dtype=np.uint8)
-    
-    while total_frame_ind < num_frame:
+    starth = time.time()
+    img_length = num_frame_per_file
 
-        if total_frame_ind == 0:
-            starth = time.time()
-        
+    print('Num frame: ' + str(num_frame))
+
+    if num_frame == 0:
+        frame_limit = False
+        num_frame = total_frame_ind + num_frame_per_file + 1
+    else:
+        frame_limit = True
+
+    while total_frame_ind < num_frame:
         img = q.get()
+        img = np.expand_dims(img, axis=0)
         queue_size = q.qsize()
 
-        # make an array of images
-        imgs[frame_ind,:,:] = img
+        if frame_ind == 0:
+            start = time.time()
+
+            save_file = 'imgs_camera' + str(camera_ind) + '_file' + str(int(file_ind)) + '.h5'
+            save_full = os.path.join(save_folder, save_file)
+            hf = h5py.File(save_full, 'w')
+            dset = hf.create_dataset('imgs',data=img,chunks=(1,image_y/2,image_x/2), maxshape=(img_length, image_y, image_x))
+        else:
+            dset.resize(dset.shape[0]+1, axis=0)
+            dset[-1:,:,:] = img
 
         frame_ind = frame_ind + 1
         total_frame_ind = total_frame_ind + 1
 
-        if frame_ind >= num_frame_per_file or total_frame_ind == num_frame:
-            save_file = 'imgs_camera' + str(camera_ind) + '_file' + str(int(file_ind)) + '.h5'
-            save_full = os.path.join(save_folder, save_file)
+        if not frame_limit:
+            num_frame = total_frame_ind + num_frame_per_file + 1        
 
-            start = time.time()
-            hf = h5py.File(save_full, 'w')
-            hf.create_dataset('imgs', data=imgs,chunks=(1,image_y,image_x), maxshape=(num_frame_per_file, image_y, image_x))
+        # last write of the file
+        if frame_ind >= num_frame_per_file or total_frame_ind == num_frame:
+            file_size = dset.shape[0]
             hf.close()
             del hf
-            end = time.time()
 
-            num_saved_frame = num_saved_frame + len(imgs)
+            end = time.time()
+            
+            num_saved_frame = num_saved_frame + file_size
             print('Saved camera #' + str(int(camera_ind)) + ' frame #' + str(int(num_saved_frame)) + ": " + str(end - start) + " seconds. " + str(queue_size) + " in queue.\n")
 
-            img_length = num_frame_per_file
             if num_frame - total_frame_ind < num_frame_per_file:
                 img_length = num_frame - total_frame_ind
-
-            if int(re.findall(r'\d+', bit_depth)[0]) > 8:
-                imgs = np.zeros((img_length,image_y,image_x),dtype=np.uint16)
-            else:
-                imgs = np.zeros((img_length,image_y,image_x),dtype=np.uint8)
-
+            
             file_ind = file_ind + 1
             frame_ind = 0
         
@@ -129,12 +145,20 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,i
     hf = h5py.File(save_full, 'w')
     hf.create_dataset('timestamps', data=timestamps) 
     hf.close()
-    return imgs, file_ind
+    return file_ind
 
-def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,num_frame,num_frame_per_file,save_folder):
+def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,black_level,exp_time_pattern,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,save_folder):
     # process priority
     # p = psutil.Process(os.getpid())
-    # p.nice(psutil.HIGH_PRIORITY_CLASS)
+    
+    pid = os.getpid()
+    p = psutil.Process(pid)
+    p.nice(psutil.REALTIME_PRIORITY_CLASS)
+    nice_value = p.nice()
+    print(f"Child #{camera_ind}: {p}, nice value {nice_value}", flush=True)
+    time.sleep(0.1)
+    p.cpu_affinity(cpu_core_inds)
+    print(f"Child #{camera_ind}: Set my affinity to {cpu_core_inds}, affinity now {p.cpu_affinity()}", flush=True)
 
     # create a queue
     q = queue.Queue()
@@ -143,6 +167,7 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     # find the right device index
     device_ind = [str(sn) == d for d in devices_sn]
     device_ind = [i for i, val in enumerate(device_ind) if val][0]
+    print('Camera # ' + str(camera_ind) + ' device index found')
 
     try:
         # Get the transport layer factory.
@@ -191,11 +216,13 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     camera[0].ChunkEnable = True
 
     # Exposure time
-    camera[0].ExposureTime.SetValue(exp_time)
+    camera[0].ExposureTime.SetValue(exp_time_pattern[0])
 
     # Size
     camera[0].Width.SetValue(image_x)
     camera[0].Height.SetValue(image_y)
+    camera[0].OffsetX.SetValue(offset_x)
+    camera[0].OffsetY.SetValue(offset_y)
 
     # Set bit depth
     camera[0].PixelFormat.SetValue(bit_depth)
@@ -228,87 +255,23 @@ def acquire(devices_sn,sn,camera_ind,use_trigger,bit_depth,gain,black_level,exp_
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 
     # create a separate thread for obtaining frames from camera
-    pool.submit(obtain_frame,q,q2,camera_ind,camera,num_frame,num_frame_per_file)
+    pool.submit(obtain_frame,q,q2,camera_ind,camera,num_frame,num_frame_per_file,exp_time_pattern)
 
     # create a separate thread for querying the frames from the above thread and writing to H5 files
-    pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,bit_depth,image_y,image_x)
+    pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,image_y,image_x)
     
     # wait for all tasks to complete
     pool.shutdown(wait=True)
 
     end = time.time()
 
-    print('Total time taken (seconds) : ' + str(round((end - start))) + "\n")
+    print('Camera ' + str(camera_ind) + ' time taken (seconds) : ' + str(round((end - start))) + "\n")
     camera[0].Close()
     
     return True
 
-def gui(num_camera):    
-    sg.theme('DarkAmber')   # Add a touch of color
-    layout = []
-    layout += [sg.Text('Change # of cameras'), sg.In(key='camera_num'), sg.Button('Change')],
-    layout += [sg.Text('Load parameters (.json)'), sg.In(size=(25,1), enable_events=True ,key='parameters'), sg.FileBrowse(), sg.Button('Fill')],
-    
-    for c_ind in range(num_camera):
-        layout += [sg.Text('Camera ' + str(c_ind) + ':', font=("Helvetica", 12, "bold"))],
-        layout += [sg.Text('SN'), sg.In(key='sn_' + str(c_ind))],
-        layout += [sg.Text('Save folder'), sg.In(size=(25,1), enable_events=True ,key='folder_' + str(c_ind)), sg.FolderBrowse()],
-        layout += [sg.Text('Frame number'), sg.In(key='frame_num_' + str(c_ind))],
-        layout += [sg.Checkbox('Use trigger', key='trigger_' + str(c_ind))],
-        layout += [sg.Text('Bit depth (Mono8, Mono10p, Mono12p)'), sg.In(key='bd_' + str(c_ind))],
-        layout += [sg.Text('Frame rate (Hz)'), sg.In(key='fr_' + str(c_ind))],
-        layout += [sg.Text('Exposure time (us)'), sg.In(key='et_' + str(c_ind))],
-        layout += [sg.Text('Gain (dB)'), sg.In(key='gain_' + str(c_ind))],
-        layout += [sg.Text('Black level'), sg.In(key='bl_' + str(c_ind))],
-    layout += [[sg.Button('Run'), sg.Button('Cancel')]]
-
-    layout = [
-        [
-            sg.Column(layout, scrollable=True,  vertical_scroll_only=True),
-            sg.Column([])
-        ]
-    ]
-
-    window = sg.Window('Camera parameters', layout)
-
-    while True:
-        event, values = window.read()
-        if event in (sg.WIN_CLOSED,'Run','Cancel'):
-            window.close()
-            break
-        if event == 'Change':
-            window.close()
-            break
-        if event == 'Fill':
-            # Opening JSON file
-            f = open(values['parameters'])
-
-            # returns JSON object as 
-            # a dictionary
-            data = json.load(f)
-
-            for c_ind in range(num_camera):
-                values['sn_' + str(c_ind)] = data['camera ' + str(c_ind)]['sn']
-                values['folder_' + str(c_ind)] = data['camera ' + str(c_ind)]['save folder']
-                values['frame_num_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame num']
-                values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
-                values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
-                values['fr_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame rate']
-                values['et_' + str(c_ind)] = data['camera ' + str(c_ind)]['exposure time']
-                values['bl_' + str(c_ind)] = data['camera ' + str(c_ind)]['black level']
-                values['gain_' + str(c_ind)] = data['camera ' + str(c_ind)]['gain']
-            
-            window.fill(values)
-    
-    if event == 'Cancel':
-        exit()
-
-    if event == 'Change':
-        values, num_camera = gui(int(values['camera_num']))
-
-    return values, num_camera
-
 if __name__ == "__main__":
+
     os.environ["PYLON_CAMEMU"] = "3"
 
     # The exit code of the sample application.
@@ -343,27 +306,43 @@ if __name__ == "__main__":
     # It is important to manage the available bandwidth when grabbing with multiple cameras.
     num_camera = 1
 
-    values, num_camera = gui(num_camera)
+    values, num_camera, camera_first, camera_last = gui(num_camera,num_camera)
 
+    camera_ind = list(range(num_camera))
     sn = list(range(num_camera))
     num_frame_per_camera = list(range(num_camera))
+    num_frame_per_file = list(range(num_camera))
     save_folders = list(range(num_camera))
     use_trigger = list(range(num_camera))
     bit_depth = list(range(num_camera))
     frame_rate = list(range(num_camera))
-    exp_time = list(range(num_camera))
+    exp_time_patterns = list(range(num_camera))
     gain = list(range(num_camera))
     black_level = list(range(num_camera))
+    image_y = list(range(num_camera))
+    image_x = list(range(num_camera))
+    offset_y = list(range(num_camera))
+    offset_x = list(range(num_camera))
+    cpu_core_inds = list(range(num_camera))
     for c_ind in range(num_camera):
-        sn[c_ind] = int(values['sn_' + str(c_ind)])
-        num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind)])
-        save_folders[c_ind] = values['folder_' + str(c_ind)]
-        use_trigger[c_ind] = values['trigger_' + str(c_ind)]
-        bit_depth[c_ind] = values['bd_' + str(c_ind)]
-        frame_rate[c_ind] = int(values['fr_' + str(c_ind)])
-        exp_time[c_ind] = int(values['et_' + str(c_ind)])
-        gain[c_ind] = int(values['gain_' + str(c_ind)])
-        black_level[c_ind] = int(values['bl_' + str(c_ind)])
+        camera_ind[c_ind] = c_ind + camera_first
+        sn[c_ind] = int(values['sn_' + str(c_ind + camera_first)])
+        num_frame_per_camera[c_ind] = int(values['frame_num_' + str(c_ind + camera_first)])
+        num_frame_per_file[c_ind] = int(values['frame_num_file_' + str(c_ind + camera_first)])
+        save_folders[c_ind] = values['folder_' + str(c_ind + camera_first)]
+        use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
+        bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
+        frame_rate[c_ind] = int(values['fr_' + str(c_ind + camera_first)])
+        exp_time_patterns[c_ind] = [eval(i) for i in values['et_' + str(c_ind + camera_first)][1:-1].split(', ')]
+        exp_time_patterns[c_ind] = exp_time_patterns[c_ind] * math.ceil(num_frame_per_camera[c_ind]/len(exp_time_patterns[c_ind]))
+        gain[c_ind] = int(values['gain_' + str(c_ind + camera_first)])
+        black_level[c_ind] = int(values['bl_' + str(c_ind + camera_first)])
+        image_y[c_ind] = int(values['image_y_' + str(c_ind + camera_first)])
+        image_x[c_ind] = int(values['image_x_' + str(c_ind + camera_first)])
+        offset_y[c_ind] = int(values['offset_y_' + str(c_ind + camera_first)])
+        offset_x[c_ind] = int(values['offset_x_' + str(c_ind + camera_first)])
+        cpu_core_inds[c_ind] = [eval(i) for i in values['cpu_core_inds_' + str(c_ind + camera_first)][1:-1].split(', ')]
+
 
     # make folder if it does not exist
     for save_folder in save_folders:
@@ -371,13 +350,6 @@ if __name__ == "__main__":
         if not save_folder_exists:
             os.makedirs(save_folder)
             print("Save folder created.")
-    
-    # image size
-    image_y = 1216
-    image_x = 1936
-
-    # max number of frames per file
-    num_frame_per_file = 100
 
     try:
         # list of devices
@@ -395,20 +367,17 @@ if __name__ == "__main__":
 
         start = time.time()
 
-        # make multiprocessing nodes
-        p = [0]*num_camera
-        for i in range(0,num_camera):
-            save_folder = save_folders[i]
-            print(save_folder)
-            p[i] = mp.Process(target=acquire,args=(devices_sn,sn[i],i,use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y,image_x,num_frame_per_camera[i],num_frame_per_file,save_folder,))
+        with mp.Pool() as pool:
+            for i in range(num_camera):
+                save_folder = save_folders[i]
+                
+                #cpu_core_inds = cpu_core_inds[cpu_core_inds < 24] # make sure max # of cores is not reached
+                print(save_folder)
+                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds[i],use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time_patterns[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file[i],save_folder,))
 
-        # run the new process
-        for i in range(0,num_camera):
-            p[i].start()
-
-        # join the new process to main process
-        for i in range(0,num_camera):
-            p[i].join()
+            # Wait for children to finnish
+            pool.close()
+            pool.join()
 
         end = time.time()
 
