@@ -13,8 +13,9 @@ import re
 import FreeSimpleGUI as sg
 import json
 import psutil
+import math
 
-def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
+def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file,exp_time_pattern):
     starth = time.time()
     print('Obtain frame started for camera # ' + str(camera_ind))
     total_frame_ind = 0
@@ -36,13 +37,15 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file):
         if not camera.IsGrabbing():
             break
 
-        if total_frame_ind % 100 == 0:
-            print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind) + ', ' + str(time.time()-t_start) + ' seconds, q = ' + str(q.qsize()) + "\n")
+        camera[0].ExposureTime.SetValue(exp_time_pattern[total_frame_ind])
+
+        if total_frame_ind % 100 == 99:
+            print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind+1) + ', ' + str(time.time()-t_start) + ' seconds, q = ' + str(q.qsize()) + "\n")
         
         # first value is wait time before time out (in ms)
         grabResult = camera.RetrieveResult(
             300000, pylon.TimeoutHandling_ThrowException)
-        
+                
         # Access the chunk data attached to the result.
         # Before accessing the chunk data, you should check to see
         # if the chunk is readable. When it is readable, the buffer
@@ -144,7 +147,7 @@ def save_h5(q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,image_y,ima
     hf.close()
     return file_ind
 
-def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,black_level,exp_time,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,save_folder):
+def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,black_level,exp_time_pattern,frame_rate,image_y,image_x,offset_y,offset_x,num_frame,num_frame_per_file,save_folder):
     # process priority
     # p = psutil.Process(os.getpid())
     
@@ -213,7 +216,7 @@ def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,bl
     camera[0].ChunkEnable = True
 
     # Exposure time
-    camera[0].ExposureTime.SetValue(exp_time)
+    camera[0].ExposureTime.SetValue(exp_time_pattern[0])
 
     # Size
     camera[0].Width.SetValue(image_x)
@@ -252,7 +255,7 @@ def acquire(devices_sn,sn,camera_ind,cpu_core_inds,use_trigger,bit_depth,gain,bl
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 
     # create a separate thread for obtaining frames from camera
-    pool.submit(obtain_frame,q,q2,camera_ind,camera,num_frame,num_frame_per_file)
+    pool.submit(obtain_frame,q,q2,camera_ind,camera,num_frame,num_frame_per_file,exp_time_pattern)
 
     # create a separate thread for querying the frames from the above thread and writing to H5 files
     pool.submit(save_h5,q,q2,camera_ind,num_frame,num_frame_per_file,save_folder,image_y,image_x)
@@ -342,7 +345,7 @@ def gui(camera_first,camera_last):
                 values['trigger_' + str(c_ind)] = data['camera ' + str(c_ind)]['use trigger']
                 values['bd_' + str(c_ind)] = data['camera ' + str(c_ind)]['bit depth']
                 values['fr_' + str(c_ind)] = data['camera ' + str(c_ind)]['frame rate']
-                values['et_' + str(c_ind)] = data['exposure time']
+                values['et_' + str(c_ind)] = data['camera ' + str(c_ind)]['exposure time']
                 values['bl_' + str(c_ind)] = data['camera ' + str(c_ind)]['black level']
                 values['gain_' + str(c_ind)] = data['camera ' + str(c_ind)]['gain']
                 values['image_y_' + str(c_ind)] = data['camera ' + str(c_ind)]['image y']
@@ -407,7 +410,7 @@ if __name__ == "__main__":
     use_trigger = list(range(num_camera))
     bit_depth = list(range(num_camera))
     frame_rate = list(range(num_camera))
-    exp_time = list(range(num_camera))
+    exp_time_patterns = list(range(num_camera))
     gain = list(range(num_camera))
     black_level = list(range(num_camera))
     image_y = list(range(num_camera))
@@ -424,7 +427,8 @@ if __name__ == "__main__":
         use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
         bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
         frame_rate[c_ind] = int(values['fr_' + str(c_ind + camera_first)])
-        exp_time[c_ind] = int(values['et_' + str(c_ind + camera_first)])
+        exp_time_patterns[c_ind] = [eval(i) for i in values['et_' + str(c_ind + camera_first)][1:-1].split(', ')]
+        exp_time_patterns[c_ind] = exp_time_patterns[c_ind] * math.ceil(num_frame_per_camera[c_ind]/len(exp_time_patterns[c_ind]))
         gain[c_ind] = int(values['gain_' + str(c_ind + camera_first)])
         black_level[c_ind] = int(values['bl_' + str(c_ind + camera_first)])
         image_y[c_ind] = int(values['image_y_' + str(c_ind + camera_first)])
@@ -432,6 +436,7 @@ if __name__ == "__main__":
         offset_y[c_ind] = int(values['offset_y_' + str(c_ind + camera_first)])
         offset_x[c_ind] = int(values['offset_x_' + str(c_ind + camera_first)])
         cpu_core_inds[c_ind] = [eval(i) for i in values['cpu_core_inds_' + str(c_ind + camera_first)][1:-1].split(', ')]
+
 
     # make folder if it does not exist
     for save_folder in save_folders:
@@ -462,7 +467,7 @@ if __name__ == "__main__":
                 
                 #cpu_core_inds = cpu_core_inds[cpu_core_inds < 24] # make sure max # of cores is not reached
                 print(save_folder)
-                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds[i],use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file[i],save_folder,))
+                pool.apply_async(acquire, (devices_sn,sn[i],camera_ind[i],cpu_core_inds[i],use_trigger[i],bit_depth[i],gain[i],black_level[i],exp_time_patterns[i],frame_rate[i],image_y[i],image_x[i],offset_y[i],offset_x[i],num_frame_per_camera[i],num_frame_per_file[i],save_folder,))
 
             # Wait for children to finnish
             pool.close()
