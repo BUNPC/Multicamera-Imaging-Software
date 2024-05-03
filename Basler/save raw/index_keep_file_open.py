@@ -37,7 +37,9 @@ def obtain_frame(q,q2,camera_ind,camera,num_frame,num_frame_per_file,exp_time_pa
         if not camera.IsGrabbing():
             break
 
-        camera[0].ExposureTime.SetValue(exp_time_pattern[total_frame_ind])
+        if total_frame_ind > 0:
+            if exp_time_pattern[total_frame_ind] != exp_time_pattern[total_frame_ind-1]:
+                camera[0].ExposureTime.SetValue(exp_time_pattern[total_frame_ind])
 
         if total_frame_ind % 100 == 99:
             print('Acquiring camera # ' + str(camera_ind) + ' frame # ' + str(total_frame_ind+1) + ', ' + str(time.time()-t_start) + ' seconds, q = ' + str(q.qsize()) + "\n")

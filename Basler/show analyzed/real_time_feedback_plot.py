@@ -22,7 +22,6 @@ def obtain_frame(q,camera_ind,camera,num_frame_per_file,exp_time_pattern):
     print('Obtain frame started for camera # ' + str(camera_ind))
     total_frame_ind = 0
     frame_ind = 0
-    start = time.time()
 
     while True:
         if not camera.IsGrabbing():
@@ -33,7 +32,7 @@ def obtain_frame(q,camera_ind,camera,num_frame_per_file,exp_time_pattern):
         
         exp_ind = total_frame_ind % len(exp_time_pattern)
         camera[0].ExposureTime.SetValue(exp_time_pattern[exp_ind])
-        
+
         # first value is wait time before time out (in ms)
         grabResult = camera.RetrieveResult(
             120000, pylon.TimeoutHandling_ThrowException)
