@@ -122,7 +122,11 @@ def parse_gui_output(values, num_camera, camera_first):
         use_trigger[c_ind] = values['trigger_' + str(c_ind + camera_first)]
         bit_depth[c_ind] = values['bd_' + str(c_ind + camera_first)]
         frame_rate[c_ind] = int(values['fr_' + str(c_ind + camera_first)])
-        exp_time_patterns[c_ind] = [eval(i) for i in values['et_' + str(c_ind + camera_first)][1:-1].split(', ')]
+        if '(' not in values['et_' + str(c_ind + camera_first)]:
+            exp_time_str = '(' + values['et_' + str(c_ind + camera_first)] + ')'
+        else:
+            exp_time_str = values['et_' + str(c_ind + camera_first)]
+        exp_time_patterns[c_ind] = [eval(i) for i in exp_time_str[1:-1].split(', ')]
         exp_time_patterns[c_ind] = exp_time_patterns[c_ind] * math.ceil(num_frame_per_camera[c_ind]/len(exp_time_patterns[c_ind]))
         gain[c_ind] = int(values['gain_' + str(c_ind + camera_first)])
         black_level[c_ind] = int(values['bl_' + str(c_ind + camera_first)])
