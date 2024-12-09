@@ -127,6 +127,8 @@ def parse_gui_output(values, num_camera, camera_first):
         else:
             exp_time_str = values['et_' + str(c_ind + camera_first)]
         exp_time_patterns[c_ind] = [eval(i) for i in exp_time_str[1:-1].split(', ')]
+        if len(exp_time_patterns[c_ind]) == 1:
+            exp_time_patterns[c_ind] = exp_time_patterns[c_ind][0]
         exp_time_patterns[c_ind] = exp_time_patterns[c_ind] * math.ceil(num_frame_per_camera[c_ind]/len(exp_time_patterns[c_ind]))
         gain[c_ind] = int(values['gain_' + str(c_ind + camera_first)])
         black_level[c_ind] = int(values['bl_' + str(c_ind + camera_first)])

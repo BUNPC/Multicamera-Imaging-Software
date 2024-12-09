@@ -131,9 +131,12 @@ def update(i, lines, axs, q, camera_first_ind, csv_file_name):
     for source_ind in range(0,source_num):
         for camera_ind in range(0,camera_num):
             y = np.squeeze(data[source_ind,camera_ind,:])
+            y = y - 24.5
             lines[source_ind*camera_num + camera_ind].set_ydata(y)
-            y_min = np.min(y)
-            y_max = np.max(y)
+            y_min = np.mean(y)*0.98
+            y_max = np.mean(y)*1.02
+            y_min = np.min([y_min, np.min(y)])
+            y_max = np.max([y_max, np.max(y)])
             if y_max == y_min:
                 y_max = y_min + 0.01 
             if len(axs.shape) == 1:
