@@ -170,11 +170,42 @@ def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
         os.remove(csv_file_name)
 
 
+    # List of source-detector pairs with 1-based indices
+    green_pairs_1based = [
+        (5, 1), (6, 1),
+        (7, 2), (8, 2),
+        (9, 3), (10, 3),
+        (7, 4), (8, 4),
+        (3, 5), (4, 5), (5, 5), (6, 5),
+        (1, 6), (2, 6), (9, 6), (10, 6),
+        (7, 7), (8, 7),
+        (1, 8), (2, 8), (11, 8), (12, 8),
+        (3, 9), (4, 9), (13, 9), (14, 9),
+        (7, 10), (8, 10),
+        (5, 11), (6, 11), (13, 11), (14, 11),
+        (9, 12), (10, 12), (11, 12), (12, 12),
+        (7, 13), (8, 13),
+        (5, 14), (6, 14),
+        (7, 15), (8, 15),
+        (9, 16), (10, 16)
+    ]
+
+    # Convert to zero-based indices by subtracting 1 from source and detector
+    green_pairs = [(s-1, d-1) for s, d in green_pairs_1based]
+
+    # Initialize colors matrix
+    colors = [['black' for _ in range(17)] for _ in range(14)]
+
+    # Set green for specified pairs
+    for s_idx, d_idx in green_pairs:
+        colors[s_idx][d_idx] = 'green'
 
     # get data from other threads
     camera_1_frame = 0
     print('Updating table')
-    fig, axs = plt.subplots(source_num, camera_num, figsize=(10, 6), layout='constrained')
+    fig_w = max(10, camera_num * 1.75)
+    fig_h = max(6, source_num * 0.625)
+    fig, axs = plt.subplots(source_num, camera_num, figsize=(fig_w, fig_h), layout='constrained')
     # plt.ion()
     # fig.show()
     #fig.canvas.show()
@@ -191,7 +222,7 @@ def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
                 #axs[source_ind].text(1, np.mean(y)*0.99, str(np.std(y)/(np.mean(y)+0.00001)))
 
             else:
-                lines_row = lines_row + axs[source_ind,camera_ind].plot([x / (frame_rate/source_num) for x in range(0,y.size)],y,linewidth=1)
+                lines_row = lines_row + axs[source_ind,camera_ind].plot([x / (frame_rate/source_num) for x in range(0,y.size)],y,linewidth=1,color = colors[source_ind][camera_ind + camera_first_ind - 1])
                 axs[source_ind,camera_ind].set_title('S' + str(source_ind+1) + 'D' + str(camera_ind + camera_first_ind),fontsize = 8)
                 axs[source_ind,camera_ind].grid()
                 #axs[source_ind].text(1, np.mean(y)*0.99, str(np.std(y)/(np.mean(y)+0.00001)))
