@@ -231,6 +231,14 @@ def pool_data(camera_num,source_num,frame_rate,q,camera_first_ind):
         lines = lines + lines_row
 
     anim = FuncAnimation(fig, update, frames=100, fargs=(lines, axs, q, camera_first_ind, csv_file_name), interval=200)
+    
+    # Maximize the figure window (TkAgg backend on Windows)
+    manager = plt.get_current_fig_manager()
+    try:
+        manager.window.state('zoomed')
+    except Exception:
+        pass  # if it fails, just continue silently
+
     plt.show()
 
     # while camera_1_frame < camera_frame_num:
